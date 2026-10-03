@@ -1,0 +1,57 @@
+import {readFile,writeFile,mkdir,rename,rm,cp} from 'node:fs/promises';
+import {createHash} from 'node:crypto';
+import {fileURLToPath} from 'node:url';
+import path from 'node:path';
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'.');
+const stage=path.join(root,'state','build-'+Date.now());
+await mkdir(path.join(stage,'assets'),{recursive:true});
+async function asset(name,body,extension){const hash=createHash('sha256').update(body).digest('hex').slice(0,12);const url=`/assets/${name}-${hash}.${extension}`;await writeFile(stage+url,body);return url;}
+const xterm=await asset('xterm',await readFile(root+'/frontend-tools/node_modules/@xterm/xterm/lib/xterm.mjs'),'js');
+const fit=await asset('fit',await readFile(root+'/frontend-tools/node_modules/@xterm/addon-fit/lib/addon-fit.mjs'),'js');
+const search=await asset('search',await readFile(root+'/frontend-tools/node_modules/@xterm/addon-search/lib/addon-search.mjs'),'js');
+const keys=await asset('terminal-keys',await readFile(root+'/src/terminal-keys.mjs'),'js');
+const billing=await asset('billing',await readFile(root+'/src/billing.mjs'),'js');
+let seasonsSource=await readFile(root+'/src/seasons.mjs','utf8');
+const seasons=await asset('seasons',seasonsSource,'js');
+const appearance=await asset('appearance',(await readFile(root+'/src/appearance.mjs','utf8')).replace("'./seasons.mjs'",JSON.stringify(seasons)),'js');
+const terminalAppearance=await asset('terminal-appearance',await readFile(root+'/src/terminal-appearance.mjs'),'js');
+const themeDoc=await asset('theme-guide',await readFile(root+'/../docs/主题开发.md'),'md');
+const themeExample=await asset('theme-example',await readFile(root+'/../docs/themes/waterside.yuji-theme.json'),'json');
+const themes=await asset('themes',(await readFile(root+'/src/themes.mjs','utf8')).replace("'./appearance.mjs'",JSON.stringify(appearance)).replace('__THEME_DOC__',themeDoc).replace('__THEME_EXAMPLE__',themeExample),'js');
+const anime=await asset('anime-sky',await readFile(root+'/src/anime-sky.svg'),'svg');
+const {build}=await import('./frontend-tools/node_modules/esbuild/lib/main.js');
+async function bundle(entry){return (await build({entryPoints:[root+'/src/'+entry],bundle:true,write:false,format:'esm',platform:'browser',target:'es2022',minify:true,nodePaths:[root+'/frontend-tools/node_modules']})).outputFiles[0].contents;}
+const editor=await asset('editor',await bundle('editor.mjs'),'js');
+const transferWorker=await asset('transfer-worker',await bundle('transfer-worker.mjs'),'js');
+const downloadService=await asset('download-service',await readFile(root+'/src/download-service.mjs'),'js');
+const downloadStream=await asset('download-stream',(await readFile(root+'/src/download-stream.mjs','utf8')).replace('__DOWNLOAD_SERVICE__',downloadService),'js');
+const transfers=await asset('transfers',(await readFile(root+'/src/transfers.mjs','utf8')).replace('__TRANSFER_WORKER__',transferWorker).replace("'./download-stream.mjs'",JSON.stringify(downloadStream)),'js');
+const files=await asset('files',(await readFile(root+'/src/files.mjs','utf8')).replace("'./editor.mjs'",JSON.stringify(editor)).replace("'./transfers.mjs'",JSON.stringify(transfers)),'js');
+const terminalRetry=await asset('terminal-retry',await readFile(root+'/src/terminal-retry.mjs'),'js');
+const terminal=await asset('terminal',(await readFile(root+'/src/terminal.mjs','utf8')).replace("'./terminal-retry.mjs'",JSON.stringify(terminalRetry)).replace("'./terminal-appearance.mjs'",JSON.stringify(terminalAppearance)).replace("'./terminal-keys.mjs'",JSON.stringify(keys)).replace("'./addon-search.mjs'",JSON.stringify(search)).replace("'./xterm.mjs'",JSON.stringify(xterm)).replace("'./addon-fit.mjs'",JSON.stringify(fit)).replace("'./files.mjs'",JSON.stringify(files)).replace("'./transfers.mjs'",JSON.stringify(transfers)),'js');
+const qr=await asset('qrcode',await readFile(root+'/frontend-tools/node_modules/qrcode-generator/dist/qrcode.mjs'),'js');
+const authenticator=await asset('authenticator',(await readFile(root+'/src/authenticator.mjs','utf8')).replace("'./qrcode.mjs'",JSON.stringify(qr)),'js');
+let countrySource=await readFile(root+'/src/countries.mjs','utf8');
+const dataset=JSON.parse(await readFile(root+'/controller-rust/assets/countries.json','utf8'));
+for(const code of Object.keys(dataset)){const low=code.toLowerCase();const file=await asset('flag-'+low,await readFile(root+'/src/flags/'+low+'.svg'),'svg');countrySource=countrySource.replace(JSON.stringify('./flags/'+low+'.svg'),JSON.stringify(file));}
+const countries=await asset('countries',countrySource,'js');
+const network=await asset('network',await readFile(root+'/src/network.mjs'),'js');
+const renewals=await asset('renewals',(await readFile(root+'/src/renewals.mjs','utf8')).replace("'./billing.mjs'",JSON.stringify(billing)),'js');
+const offsite=await asset('offsite',await readFile(root+'/src/offsite.mjs'),'js');
+const inspector=await asset('inspector',await readFile(root+'/src/inspector.mjs'),'js');
+const operations=await asset('operations',(await readFile(root+'/src/operations.mjs','utf8')).replace("'./offsite.mjs'",JSON.stringify(offsite)),'js');
+const admin=await asset('admin',(await readFile(root+'/src/admin.mjs','utf8')).replace("'./themes.mjs'",JSON.stringify(themes)).replace("'./appearance.mjs'",JSON.stringify(appearance)).replace("'./billing.mjs'",JSON.stringify(billing)).replace("'./operations.mjs'",JSON.stringify(operations)).replace("'./inspector.mjs'",JSON.stringify(inspector)).replace("'./terminal.mjs'",JSON.stringify(terminal)).replace("'./authenticator.mjs'",JSON.stringify(authenticator)).replace("'./countries.mjs'",JSON.stringify(countries)).replace("'./renewals.mjs'",JSON.stringify(renewals)),'js');
+const app=await asset('app',(await readFile(root+'/src/app.mjs','utf8')).replace("'./appearance.mjs'",JSON.stringify(appearance)).replace("'./admin.mjs'",JSON.stringify(admin)).replace("'./countries.mjs'",JSON.stringify(countries)).replace("'./network.mjs'",JSON.stringify(network)),'js');
+const style=await asset('style',(await readFile(root+'/frontend-tools/node_modules/@xterm/xterm/css/xterm.css','utf8'))+'\n'+(await readFile(root+'/src/style.css','utf8'))+'\n'+(await readFile(root+'/src/appearance.css','utf8')).replaceAll('__ANIME_BG__',anime),'css');
+const html=(await readFile(root+'/src/index.html','utf8')).replace('__STYLE__',style).replace('__SCRIPT__',app);
+if(html.includes('__STYLE__')||html.includes('__SCRIPT__'))throw Error('Unresolved build placeholders');
+await writeFile(stage+'/index.html',html);
+await cp(root+'/src/favicon.svg',stage+'/favicon.svg');
+// Publish immutable assets first; swap HTML only after all its dependencies exist.
+await mkdir(root+'/public/assets',{recursive:true});
+await cp(stage+'/assets',root+'/public/assets',{recursive:true});
+await cp(stage+'/favicon.svg',root+'/public/favicon.svg');
+await cp(stage+'/index.html',root+'/public/.index.next.html');
+await rename(root+'/public/.index.next.html',root+'/public/index.html');
+await rm(stage,{recursive:true});
+console.log(JSON.stringify({htmlBytes:Buffer.byteLength(html),assets:[app,admin,style]},null,2));
