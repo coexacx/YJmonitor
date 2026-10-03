@@ -2,7 +2,7 @@
 
 Nginx + Rust 单二进制服务器探针。页面、网页安装向导、API 与 WSS 均内嵌在主控程序中，运行无需 PHP-FPM、数据库、Node.js 或 Rust 编译环境。
 
-[下载完整安装包](https://github.com/coexacx/yuji-probe-rust/releases/latest) · [一键安装与宝塔部署](docs/Nginx-Rust部署教程.md) · [从原仓库迁移](docs/仓库迁移-0.10.1.md) · [构建源码](ops/BUILD.md)
+[下载完整安装包](https://github.com/coexacx/yuji-probe-rust/releases/latest) · [一键安装与宝塔部署](docs/Nginx-Rust部署教程.md) · [宝塔 Nginx 配置位置与完整示例](docs/宝塔Nginx配置说明.md) · [从原仓库迁移](docs/仓库迁移-0.10.1.md) · [构建源码](ops/BUILD.md)
 
 本仓库独立维护 Nginx + Rust 版。原 [Nginx + PHP + Rust 项目](https://github.com/coexacx/yuji-probe) 保留自己的发行与更新通道。本仓库的安装器、主控更新、Agent 下载全部使用 **coexacx/yuji-probe-rust**。
 

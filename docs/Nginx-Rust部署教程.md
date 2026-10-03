@@ -135,56 +135,51 @@ systemctl status yuji-probe-rust --no-pager
 
 ### 5. 配置本网站 Nginx 反向代理
 
-在宝塔该站点配置的 **HTTPS server 块**中，删除本网站原有的 PHP、伪静态和冲突的 `location /`。保留域名、证书路径、SSL 设置和证书验证相关配置。加入：
+请按 [宝塔 Nginx 配置位置与完整示例](宝塔Nginx配置说明.md) 操作。此前教程没有区分宝塔的两个编辑入口，现已按实际部署补齐。
 
-```nginx
+默认采用现有生产站的两份文件布局：
+
+| 放置位置 | 内容 |
+| --- | --- |
+| 网站 → 配置文件 → HTTPS `server` 块内 | 域名、SSL、ACME，以及下列站点参数和 `include`。 |
+| 网站 → 伪静态 | 详细说明中“方案一第二步”的完整 `location` 代理规则；不要放入外层 `server` 块。 |
+
+在主配置中修改或补充以下内容；已有同名参数和 `include` 行时直接沿用或修改，不重复追加。请把示例域名替换为自己的域名：
+
+~~~nginx
+autoindex off;
 client_max_body_size 24m;
 client_header_timeout 10s;
 client_body_timeout 10s;
 send_timeout 15s;
-# 不把私有安装链接的查询参数写入访问日志；后台另有操作审计。
+keepalive_timeout 30s;
+# 不将安装链接的查询参数写入访问日志；保留站点原有 error_log。
 access_log off;
 
-location = /_internal/health { return 404; }
-location ~ ^/(?:app|bin|storage|source|docs|ops|vendor|node_modules)(?:/|$) { return 404; }
-location ~ /\. { return 404; }
+include /www/server/panel/vhost/rewrite/probe.example.com.conf;
+~~~
 
-location ~ ^/api/(?:agent|terminal)$ {
-    proxy_pass http://127.0.0.1:19282;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header Upgrade $http_upgrade;
-    proxy_set_header Connection "upgrade";
-    proxy_read_timeout 185s;
-    proxy_send_timeout 30s;
-    proxy_buffering off;
-}
-location = /api/enroll/claim {
-    proxy_pass http://127.0.0.1:19282;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Probe-Gateway "";
-    proxy_read_timeout 185s;
-    proxy_buffering off;
-}
-location / {
-    proxy_pass http://127.0.0.1:19282;
-    proxy_http_version 1.1;
-    proxy_set_header Host $host;
-    proxy_set_header X-Real-IP $remote_addr;
-    proxy_set_header X-Probe-Gateway "";
-    proxy_set_header Connection "";
-    proxy_read_timeout 65s;
-    proxy_send_timeout 30s;
-}
-```
+随后把 [完整代理规则](宝塔Nginx配置说明.md#第二步网站伪静态) 放入该站点“伪静态”。主配置中的 `include` 会将它加载进相同的 `server` 上下文，因此其中的 `proxy_pass` 是正常的反向代理。
 
-如果使用非标准 HTTPS 端口，需要在 `-origin` 带上端口，并把 Host 设置改为 `$http_host`。常规 443 使用上面的配置即可。不要直接把来自互联网的 X-Real-IP 或 X-Probe-Gateway 透传给主控。
+也可以选择 [方案二：全部放进主配置](宝塔Nginx配置说明.md#方案二所有内容集中放在主配置)，使用 [完整片段](../ops/templates/nginx-baota-rust.server.inc)，并将该站点伪静态文件留空或仅写注释。两种方案不能叠加，否则会产生重复 `location`。
 
-宝塔保存前会校验配置；手工管理的 Nginx 使用 `nginx -t` 检查通过后仅 reload。宝塔可能使用 `/www/server/nginx/sbin/nginx`。不要停止其他站点的 Nginx 或 PHP 服务。
+保留该站点证书与 ACME 配置，移除旧 PHP、冲突的 `location /` 以及直接从本地目录提供 JS/CSS/图片的旧规则。详细说明包含六项参数解释、端口对应关系、WebSocket 设置、备份、加载检查及常见错误处理。
 
-启用 SELinux 的系统使用发行包内 `ops/templates/yuji-probe.cil`，将内部监听端口标记为 `yuji_probe_port_t`，程序、状态与证书设置对应标签；保持 enforcing。自定义目录与端口时参照 `install.sh` 的 SELinux 段调整，不直接关闭 SELinux。
+编辑两份文件后执行：
+
+~~~sh
+/www/server/nginx/sbin/nginx -t
+~~~
+
+检查成功后执行：
+
+~~~sh
+/www/server/nginx/sbin/nginx -s reload
+~~~
+
+使用当前实际运行的 Nginx 路径；普通发行版通常直接使用 `nginx`。操作范围仅限本网站，其他网站的 Nginx 配置和 PHP 服务继续运行。
+
+启用 SELinux 的系统使用发行包内 `ops/templates/yuji-probe.cil`，将内部监听端口标记为 `yuji_probe_port_t`，程序、状态与证书设置对应标签；保持 enforcing。自定义目录与端口时参照 `install.sh` 的 SELinux 段调整。
 
 ### 6. 使用网页安装向导
 
