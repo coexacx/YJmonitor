@@ -1,29 +1,29 @@
-import {terminalAppearance} from './terminal-appearance.mjs';
-import {TerminalRetry,canRetryRequest,canRetryClose} from './terminal-retry.mjs';
-import {createTerminalKeys} from './terminal-keys.mjs';
-import {SearchAddon} from './addon-search.mjs';
-import {createFileBrowser} from './files.mjs';
-import {findTransferContext} from './transfers.mjs';
+import {terminalAppearance} from "/assets/terminal-appearance-883214974dd2.js";
+import {TerminalRetry,canRetryRequest,canRetryClose} from "/assets/terminal-retry-9f33960c93a8.js";
+import {createTerminalKeys} from "/assets/terminal-keys-6116c4b1e85e.js";
+import {SearchAddon} from "/assets/search-3ea90162233f.js";
+import {createFileBrowser} from "/assets/files-630610f9d78b.js";
+import {findTransferContext} from "/assets/transfers-e30ce1961db2.js";
 const transferClaims=new Set();
-import {Terminal} from './xterm.mjs';
-import {FitAddon} from './addon-fit.mjs';
+import {Terminal} from "/assets/xterm-b336ec65a086.js";
+import {FitAddon} from "/assets/fit-2d87e1bddc73.js";
 function createSession(api,root,dialog,onClose){
  const $=s=>root.querySelector(s),mount=$('#terminal-mount'),placeholder=$('.terminal-placeholder'),connect=$('#terminal-connect'),disconnect=$('#terminal-disconnect');
- let socket=null,term=null,fit=null,search=null,sendInput=()=>{},resize=null,touch=null,current=null,generation=0,connected=false,commands=[],transferSession='',shellSession='',lookedForTransfers=false;
+ let socket=null,term=null,fit=null,search=null,sendInput=()=>{},resize=null,current=null,generation=0,connected=false,commands=[],transferSession='',shellSession='',lookedForTransfers=false;
  function claimFiles(id){if(transferSession)transferClaims.delete(transferSession);transferSession=id||'';if(transferSession)transferClaims.add(transferSession);}
  async function end(force=false){reconnect.reset();const id=shellSession;if(socket?.readyState===WebSocket.OPEN)socket.send(JSON.stringify({type:'close'}));stop(true);if(id&&!force){try{await api('/api/admin/terminal-close','POST',{id},{keepalive:true});}catch(e){if(![401,404].includes(e.status)&&!e.staleSession){hint('结束会话尚未确认，网络恢复后请重试；脱离连接的会话将在 5 分钟后清理。');throw e;}}}shellSession='';connect.textContent='连接';files.end?.();claimFiles('');}
 
  const reconnect=new TerminalRetry({retry:()=>{if(current&&dialog.open)start(true);},waiting:(delay,attempt,total)=>{state('等待重连');hint('连接中断，'+delay/1000+' 秒后重连（'+attempt+'/'+total+'）。将恢复原 SSH 会话。');connect.disabled=true;disconnect.disabled=false;disconnect.textContent='取消重试';}});
  const state=(value,ready=false)=>{const dot=document.createElement('i');dot.className='status-dot '+(ready?'online':'offline');$('#terminal-state').replaceChildren(dot,document.createTextNode(value));$('#terminal-footer-state').textContent='WSS · '+value;};
  const hint=value=>{$('#terminal-hint').textContent=value;};
- function stop(clear=false){reconnect.cancel();disconnect.textContent='断开';keys.ready(false);sendInput=()=>{};files.suspend?.();$('#terminal-paste').disabled=true;closePaste();$('#terminal-run-command').disabled=true;generation++;connected=false;if(socket){socket.onclose=null;socket.close(1000,'closed');socket=null;}resize?.disconnect();resize=null;connect.disabled=false;disconnect.disabled=true;state('已断开');if(clear){touch?.();touch=null;term?.dispose();term=null;fit=null;mount.replaceChildren();mount.hidden=true;placeholder.hidden=false;hint('点击连接建立终端会话。');}else if(term){term.options.disableStdin=true;}}
+ function stop(clear=false){reconnect.cancel();disconnect.textContent='断开';keys.ready(false);sendInput=()=>{};files.suspend?.();$('#terminal-paste').disabled=true;closePaste();$('#terminal-run-command').disabled=true;generation++;connected=false;if(socket){socket.onclose=null;socket.close(1000,'closed');socket=null;}resize?.disconnect();resize=null;connect.disabled=false;disconnect.disabled=true;state('已断开');if(clear){term?.dispose();term=null;fit=null;mount.replaceChildren();mount.hidden=true;placeholder.hidden=false;hint('点击连接建立终端会话。');}else if(term){term.options.disableStdin=true;}}
  function open(record){stop(true);current=record;$('#terminal-title').textContent=record.public.name;$('#terminal-target').textContent=record.username+'@'+record.ip+':'+record.port;state('未连接');hint(record.demo?'演示节点暂不支持 SSH。':record.public.online?'点击连接建立终端会话。':'节点暂未在线，可在上线后点击连接重试。');connect.disabled=record.demo;if(!dialog.open)dialog.showModal();connect.focus();loadCommands();}
  async function start(automatic=false){if(!current||!dialog.open)return;const retrying=automatic===true;if(!retrying)reconnect.reset();if(!lookedForTransfers){lookedForTransfers=true;claimFiles(findTransferContext(current.public.id,transferClaims));}if(transferSession&&!files.hasTransfers()&&connected)claimFiles('');stop(true);const run=generation;connect.disabled=true;disconnect.disabled=false;disconnect.textContent='取消连接';hint('正在请求终端授权…');state('连接中');
   try{const result=await api('/api/admin/terminal-ticket','POST',{id:current.public.id});if(run!==generation||!dialog.open)return;
    term=new Terminal({fontFamily:'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',fontSize:13,lineHeight:1.25,scrollback:5000,cursorBlink:true,allowProposedApi:false,disableStdin:true,allowTransparency:true,theme:terminalAppearance()});fit=new FitAddon();term.loadAddon(fit);search=new SearchAddon();term.loadAddon(search);
    // Block terminal-controlled links, clipboard access and window operations.
    term.parser.registerOscHandler(52,()=>true);term.parser.registerOscHandler(8,()=>true);term.parser.registerOscHandler(0,()=>true);term.parser.registerOscHandler(2,()=>true);
-   placeholder.hidden=true;mount.hidden=false;term.open(mount);fit.fit();touch=terminalTouch(term);
+   placeholder.hidden=true;mount.hidden=false;term.open(mount);fit.fit();
    socket=new WebSocket(new URL('/api/terminal',location.href).href.replace(/^https:/,'wss:'));socket.binaryType='arraybuffer';const ws=socket;let failure='',retryDecision=null;
    const send=(data)=>{if(ws.readyState===WebSocket.OPEN)ws.send(data);};
    const input=data=>{if(!connected||ws.readyState!==WebSocket.OPEN)return;if(ws.bufferedAmount>128*1024){stop();hint('输入过快，连接已关闭。');return;}for(let i=0;i<data.length;i+=16384)send(data.slice(i,i+16384));};
@@ -71,30 +71,4 @@ export function createTerminalUI(api,getRecords,toast){
  add.onclick=()=>{const r=getRecords().find(r=>r.public.id===select.value);if(r)open(r,true);else select.focus();};
  window.addEventListener('pagehide',()=>{for(const s of sessions.values())s.ui.destroy().catch(()=>{});});
  return {open,close};
-}
-
-// xterm's desktop scrollbar handles wheels; touch scrolling is local and never
-// sends arrow keys or mouse reports into a shell that is displaying history.
-function terminalTouch(term){
- const element=term.element,screen=element.querySelector('.xterm-screen');
- let gesture=null;
- const enabled=()=>term.buffer.active.type==='normal'&&term.modes.mouseTrackingMode==='none';
- const start=event=>{gesture=event.touches.length===1&&enabled()?{id:event.touches[0].identifier,x:event.touches[0].clientX,y:event.touches[0].clientY,last:event.touches[0].clientY,pixels:0,scrolling:false}:null;};
- const move=event=>{
-  if(!gesture||event.touches.length!==1||!enabled()){gesture=null;return;}
-  const point=event.touches[0];if(point.identifier!==gesture.id)return;
-  if(!gesture.scrolling){
-   const dx=Math.abs(point.clientX-gesture.x),dy=Math.abs(point.clientY-gesture.y);
-   if(Math.max(dx,dy)<8)return;
-   if(dx>dy){gesture=null;return;}gesture.scrolling=true;
-  }
-  event.preventDefault();gesture.pixels+=gesture.last-point.clientY;gesture.last=point.clientY;
-  const height=screen.clientHeight/term.rows;if(!Number.isFinite(height)||height<=0)return;
-  const lines=Math.trunc(gesture.pixels/height);if(lines){gesture.pixels-=lines*height;term.scrollLines(lines);}
- };
- const end=()=>{gesture=null;};
- element.addEventListener('touchstart',start,{passive:true});
- element.addEventListener('touchmove',move,{passive:false});
- element.addEventListener('touchend',end,{passive:true});element.addEventListener('touchcancel',end,{passive:true});
- return()=>{end();element.removeEventListener('touchstart',start);element.removeEventListener('touchmove',move);element.removeEventListener('touchend',end);element.removeEventListener('touchcancel',end);};
 }
