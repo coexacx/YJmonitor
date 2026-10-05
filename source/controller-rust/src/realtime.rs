@@ -401,7 +401,16 @@ pub async fn agent_handler(
     headers: HeaderMap,
     upgrade: Result<WebSocketUpgrade, axum::extract::ws::rejection::WebSocketUpgradeRejection>,
 ) -> Response {
-    let c = Context::new(method.as_str(), "/api/agent", headers, remote);
+    if !app.0.origin.starts_with("https://") || !remote.ip().is_loopback() {
+        return ApiError::new(403, "HTTPS reverse proxy is required").into_response();
+    }
+    let c = Context::new(
+        method.as_str(),
+        "/api/agent",
+        headers,
+        remote,
+        &app.0.origin,
+    );
     let validation = (|| -> ApiResult<(String, String)> {
         let mut i = app.lock();
         i.request(&format!("agent:{}", c.ip), 120)?;

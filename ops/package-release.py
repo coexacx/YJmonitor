@@ -12,7 +12,7 @@ parser.add_argument("--agent-amd64",type=pathlib.Path,required=True)
 parser.add_argument("--agent-arm64",type=pathlib.Path,required=True)
 args=parser.parse_args()
 root=pathlib.Path(__file__).resolve().parent.parent
-version="0.10.2"
+version="0.10.3"
 flavor="rust" if args.variant=="rust" else "panel"
 out=args.output.resolve()
 if out==root or root in out.parents: raise SystemExit("Release output must be outside the source tree")
@@ -37,7 +37,7 @@ for section in ["app","bin","docs","ops","public","source","THIRD-PARTY-NOTICES"
             if p.suffix==".log": continue
             if p.suffix in (".log",".pyc",".zip") or p.name in (".env","signing.key"): raise SystemExit("Unexpected runtime/private file: "+str(rel))
             files[str(rel)]=p.read_bytes()
-for name in ["README.md","LICENSE","SECURITY.md","install.sh",".gitignore",".gitattributes"]:
+for name in ["README.md","LICENSE","SECURITY.md","install.sh","manage.sh",".gitignore",".gitattributes"]:
     files[name]=(root/name).read_bytes()
 files["storage/.gitkeep"]=b""
 sums={k:hashlib.sha256(v).hexdigest() for k,v in files.items()}

@@ -35,11 +35,18 @@ async fn api(
         };
         return crate::web::secure(response);
     }
+    if !app.0.php_gateway
+        && req.uri().path() != "/_internal/health"
+        && !crate::web::host_matches(&req, &app.0.origin)
+    {
+        return crate::web::secure(ApiError::new(421, "请使用配置的面板地址").into_response());
+    }
     let c = Context::new(
         req.method().as_str(),
         req.uri().path(),
         req.headers().clone(),
         remote,
+        &app.0.origin,
     );
     let request_timeout = if c.path == "/api/enroll/claim" {
         180
@@ -78,6 +85,21 @@ async fn api(
                 != "application/json"
         {
             return Err(ApiError::new(415, "请使用 JSON 请求"));
+        }
+        if app.0.origin.starts_with("http://")
+            && (c.path.starts_with("/api/enroll/")
+                || [
+                    "/api/admin/inspect-ssh",
+                    "/api/admin/deploy",
+                    "/api/admin/enrollment",
+                    "/api/admin/terminal-ticket",
+                ]
+                .contains(&c.path.as_str()))
+        {
+            return Err(ApiError::new(
+                409,
+                "请先配置 HTTPS 反向代理并设置面板地址，再接入节点或使用终端",
+            ));
         }
         if c.path.starts_with("/api/admin/") {
             let mut inner = app.lock();
@@ -132,7 +154,7 @@ async fn api(
     };
     crate::web::secure(
         match timeout(Duration::from_secs(request_timeout), result).await {
-            Ok(Ok(reply)) => reply.into_response(),
+            Ok(Ok(reply)) => crate::web::reply(reply, &app.0.origin),
             Ok(Err(e)) => e.into_response(),
             Err(_) => ApiError::new(504, "请求处理超时，请重试").into_response(),
         },
@@ -277,7 +299,7 @@ fn valid_id(s: &str) -> bool {
 pub async fn serve(app: App, listen: SocketAddr) -> Result<(), &'static str> {
     let listener = TcpListener::bind(listen)
         .await
-        .map_err(|_| "loopback port unavailable")?;
+        .map_err(|_| "panel port unavailable")?;
     let router = Router::new()
         .route("/api/agent", any(realtime::agent_handler))
         .route("/api/terminal", any(terminal::handler))
@@ -290,7 +312,7 @@ pub async fn serve(app: App, listen: SocketAddr) -> Result<(), &'static str> {
     crate::retained::start(&app);
     crate::legacy_terminals::start(&app);
     crate::operations::start(&app);
-    eprintln!("Rust probe controller started on loopback");
+    eprintln!("Rust probe controller started");
     loop {
         tokio::select! {_=app.0.stop.cancelled()=>break,Some(_)=tasks.join_next()=>{},incoming=listener.accept()=>{let(socket,remote)=incoming.map_err(|_|"listener failed")?;let Ok(slot)=slots.clone().try_acquire_owned()else{drop(socket);continue};let router=router.clone();let stop=app.0.stop.clone();tasks.spawn(async move{let _slot=slot;let _=socket.set_nodelay(true);let service=service_fn(move|req:Request<hyper::body::Incoming>|{let router=router.clone();async move{let mut req=req.map(Body::new);req.extensions_mut().insert(ConnectInfo(remote));let size=req.headers().iter().map(|(k,v)|k.as_str().len()+v.len()+4).sum::<usize>();if size>8192||req.uri().to_string().len()>2048{return Ok::<_,Infallible>(ApiError::new(431,"请求头过大").into_response())}router.oneshot(req).await}});let mut builder=hyper::server::conn::http1::Builder::new();builder.timer(TokioTimer::new()).header_read_timeout(Duration::from_secs(5)).max_headers(48).max_buf_size(16384).keep_alive(false);let conn=builder.serve_connection(TokioIo::new(socket),service).with_upgrades();tokio::select!{_=stop.cancelled()=>{},_=conn=>{}}});}}
     }

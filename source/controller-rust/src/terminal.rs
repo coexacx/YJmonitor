@@ -139,7 +139,16 @@ pub async fn handler(
     headers: HeaderMap,
     upgrade: Result<WebSocketUpgrade, axum::extract::ws::rejection::WebSocketUpgradeRejection>,
 ) -> Response {
-    let c = Context::new(method.as_str(), "/api/terminal", headers, remote);
+    if !app.0.origin.starts_with("https://") || !remote.ip().is_loopback() {
+        return ApiError::new(403, "HTTPS reverse proxy is required").into_response();
+    }
+    let c = Context::new(
+        method.as_str(),
+        "/api/terminal",
+        headers,
+        remote,
+        &app.0.origin,
+    );
     let validation = (|| -> ApiResult<_> {
         let mut i = app.lock();
         i.request(&format!("terminal:{}", c.ip), 30)?;

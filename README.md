@@ -16,26 +16,28 @@ Nginx + Rust 单二进制服务器探针。页面、网页安装向导、API 与
 - 五套主题和自定义主题包，支持背景图、配色、局部样式与站点图标。
 - 签名更新、健康检查、失败恢复与手动回退。
 
-## 全新服务器安装
-
-先把域名 A 记录指向服务器；存在 AAAA 时也须指向本机 IPv6。关闭 CDN 代理，放行 TCP 80、443。
+## 一键安装与管理
 
 ~~~sh
-curl -fL --proto '=https' --proto-redir '=https' --tlsv1.2 https://raw.githubusercontent.com/coexacx/yuji-probe-rust/v0.10.2/install.sh -o /root/yuji-install.sh
+curl -fL --proto '=https' --proto-redir '=https' --tlsv1.2 https://raw.githubusercontent.com/coexacx/yuji-probe-rust/v0.10.3/install.sh -o /root/yuji-install.sh
 bash /root/yuji-install.sh
 ~~~
 
-脚本询问域名、站点名称、管理员用户名与密码，自动安装 Nginx、申请 HTTPS 证书并启用续期。适用于支持列表中的全新 Linux + systemd 主机；已有宝塔或网站请使用 [手动部署教程](docs/Nginx-Rust部署教程.md)。不要在已有安装上重跑全新安装器。
+只填写站点名称，安装结束显示 **IP:端口** 与随机生成的管理员密码。运行 sudo yuji-probe 进入管理菜单。
+
+安装器只安装程序和运行依赖，不安装 Nginx、不申请证书。已有宝塔或其他站点可以保留；接入 Agent 与使用终端前，请按 [反向代理文档](docs/反向代理.md) 手动配置 HTTPS，再在菜单设置面板地址。
+
+[Linux 安装与菜单说明](docs/Linux一键安装.md) · [0.10.3 部署变更](docs/部署变更-0.10.3.md)。已有手动部署继续使用原服务和后台签名更新，不重新安装。
 
 ## 发行内容
 
-主控 0.10.2，Agent 0.2.2。[本版修复终端滚动与输出记录](docs/终端回滚记录-0.10.2.md)。完整包为 **yuji-probe-rust-0.10.2.zip**，包含 amd64 / arm64 预编译主控与完整源码；Agent 二进制、签名清单及安装脚本在同一 Release。GitHub 自动生成的 Source code 包不含主控二进制。
+主控 0.10.3，Agent 0.2.2。[终端滚动与输出记录说明](docs/终端回滚记录-0.10.2.md)。完整包为 **yuji-probe-rust-0.10.3.zip**，包含 amd64 / arm64 预编译主控与完整源码；Agent 二进制、签名清单及安装脚本在同一 Release。GitHub 自动生成的 Source code 包不含主控二进制。
 
 更新只检查本仓库 v* 正式发行版。下载核对 Ed25519 签名、版本、架构、长度与 SHA-256，失败即停止。普通用户不需要 GitHub Token 或编译环境。
 
 ## 部署与安全
 
-Nginx 接受 HTTPS；Rust 只监听回环地址。状态目录位于 Web 公开目录之外，运行服务使用独立系统用户。安装通过服务器私有所有权链接完成，安装包不包含预设管理员、真实节点或运行密钥。
+新安装可通过 IP:端口查看面板；配置 HTTPS 后由同机 Nginx 代理，Rust 监听回环地址。状态目录位于 Web 公开目录之外，运行服务使用独立系统用户。一键安装通过私有标准输入初始化；手动 HTTPS 部署也支持服务器私有所有权链接。安装包不包含预设管理员、真实节点或运行密钥。
 
 本轮拆分保留现有协议、数据格式和发布验签公钥，已安装 Agent 无需重装。二进制名称和 Agent 服务名沿用原项目，避免破坏迁移兼容。
 

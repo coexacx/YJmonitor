@@ -170,7 +170,7 @@ def check(cfg,version):
     key=(pathlib.Path(cfg["state"])/"app.key").read_bytes()
     gateway=hashlib.sha256(b"vistart-probe-php-gateway-v1:"+key).hexdigest()
     for attempt in range(35):
-        if attempt%3==0:
+        if attempt%3==0 and parsed.scheme=="https":
             connection=LocalHTTPS(parsed.hostname,parsed.port or 443,timeout=8,context=ssl.create_default_context())
             try:
                 connection.request("GET","/api/session");connection.getresponse().read(1024)
@@ -192,7 +192,7 @@ def install_helper(args):
     if not root.is_dir() or not auth.is_file() or not (root/("bin/probe-linux-amd64" if args.distribution=="rust" else "public/index.php")).is_file():raise ValueError("panel is not installed")
     if not re.fullmatch("[a-zA-Z0-9_.@-]+\\.service",args.service):raise ValueError("invalid service")
     origin=urllib.parse.urlsplit(args.origin)
-    if origin.scheme!="https" or not origin.hostname or origin.username or origin.password or origin.query or origin.fragment or origin.path not in ("","/"):raise ValueError("invalid HTTPS origin")
+    if origin.scheme not in ("http","https") or not origin.hostname or origin.username or origin.password or origin.query or origin.fragment or origin.path not in ("","/"):raise ValueError("invalid HTTPS origin")
     if not re.fullmatch("127\\.0\\.0\\.1:[0-9]{1,5}",args.listen):raise ValueError("updater health address must be loopback")
     private(BASE);private(CONF);LIB.mkdir(parents=True,exist_ok=True,mode=0o755);LIB.chmod(0o755)
     dest=LIB/"update-panel.py";atomic(dest,pathlib.Path(__file__).read_bytes(),mode=0o755)

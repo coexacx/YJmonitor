@@ -254,14 +254,25 @@ pub struct Context {
     pub remote: SocketAddr,
 }
 impl Context {
-    pub fn new(method: &str, path: &str, headers: HeaderMap, remote: SocketAddr) -> Self {
+    pub fn new(
+        method: &str,
+        path: &str,
+        headers: HeaderMap,
+        remote: SocketAddr,
+        origin: &str,
+    ) -> Self {
+        let cookie = if origin.starts_with("http://") {
+            "vistart_probe_http"
+        } else {
+            COOKIE
+        };
         let sid = headers
             .get("Cookie")
             .and_then(|v| v.to_str().ok())
             .and_then(|s| {
                 s.split(';')
                     .map(str::trim)
-                    .find_map(|s| s.strip_prefix(&format!("{COOKIE}=")))
+                    .find_map(|s| s.strip_prefix(&format!("{cookie}=")))
             })
             .filter(|v| v.len() == 64)
             .unwrap_or("")

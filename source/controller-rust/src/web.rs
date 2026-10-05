@@ -40,7 +40,13 @@ pub fn host_matches(req: &Request<Body>, origin: &str) -> bool {
     req.headers()
         .get(header::HOST)
         .and_then(|v| v.to_str().ok())
-        .is_some_and(|v| v.eq_ignore_ascii_case(origin.trim_start_matches("https://")))
+        .is_some_and(|v| {
+            v.eq_ignore_ascii_case(
+                origin
+                    .trim_start_matches("https://")
+                    .trim_start_matches("http://"),
+            )
+        })
 }
 pub fn response(path: &str, head: bool, name: &str) -> Response {
     if path == "/" {
@@ -83,6 +89,18 @@ pub fn response(path: &str, head: bool, name: &str) -> Response {
     }
     ApiError::new(404, "页面不存在").into_response()
 }
+/// HTTP setup uses a separate cookie; secure-origin sessions cannot be downgraded.
+pub fn reply(mut reply: crate::core::ApiReply, origin: &str) -> Response {
+    if origin.starts_with("http://")
+        && let Some(cookie) = reply.cookie.as_mut()
+    {
+        *cookie = cookie
+            .replace("__Host-vistart_probe=", "vistart_probe_http=")
+            .replace("; Secure;", ";");
+    }
+    reply.into_response()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -130,5 +148,44 @@ mod tests {
         ] {
             assert_eq!(response(path, false, "probe").status(), 404);
         }
+    }
+
+    #[test]
+    fn http_and_https_sessions_have_separate_cookies() {
+        let secure = reply(
+            ApiReply::session(serde_json::json!({}), "id"),
+            "https://probe.example",
+        );
+        let cookie = secure
+            .headers()
+            .get(header::SET_COOKIE)
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(cookie.starts_with("__Host-vistart_probe="));
+        assert!(cookie.contains("; Secure;"));
+        let initial = reply(
+            ApiReply::session(serde_json::json!({}), "id"),
+            "http://192.0.2.5:19281",
+        );
+        let cookie = initial
+            .headers()
+            .get(header::SET_COOKIE)
+            .unwrap()
+            .to_str()
+            .unwrap();
+        assert!(cookie.starts_with("vistart_probe_http="));
+        assert!(!cookie.contains("; Secure;"));
+        assert!(cookie.contains("HttpOnly"));
+    }
+    #[test]
+    fn initial_http_host_includes_its_port() {
+        let r = Request::builder()
+            .header(header::HOST, "192.0.2.5:19281")
+            .body(Body::empty())
+            .unwrap();
+        assert!(host_matches(&r, "http://192.0.2.5:19281"));
+        assert!(!host_matches(&r, "http://192.0.2.5:19282"));
+        assert!(!host_matches(&r, "https://probe.example"));
     }
 }

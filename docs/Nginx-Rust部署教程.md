@@ -1,34 +1,16 @@
-# Nginx + Rust 部署教程（0.10.2）
+# Nginx + Rust 部署教程（0.10.3）
 
 本发行版将页面、静态资源、网页安装向导、API、WSS 和业务主控放在一个 Rust 可执行文件里。运行时使用 Nginx 与一个主控进程，不启动 PHP-FPM，不需要数据库、Node.js 或 Rust 编译环境。源码包同时附带 amd64、arm64 二进制，实际只运行对应架构的一个。
 
 本仓库为独立 Nginx + Rust 项目，发布与更新均使用 coexacx/yuji-probe-rust 的 v* 标签。原 PHP 项目保留在 coexacx/yuji-probe。Agent 0.2.2、业务协议和私有状态格式兼容。
 
-## 一、全新 Linux 主机一键安装
+## 一、一键部署
 
-适用于支持列表中的 Linux + systemd 主机。先把域名 A 记录指向本机；有 AAAA 记录时也须指向本机 IPv6。关闭 CDN 代理，在云安全组放行 TCP 80、443。具体系统见 [系统支持](系统支持.md)。
+按照 [Linux 一键安装与管理菜单](Linux一键安装.md) 下载并执行当前安装脚本。只需填写站点名称，结束显示 IP:端口和自动生成的管理员密码。
 
-以 root 登录主控服务器：
+安装器不安装 Nginx、不申请证书、不占用 80/443；可在已有宝塔或网站的主机上安装。之后由用户按 [反向代理说明](反向代理.md) 手动配置 Nginx、证书，再从管理菜单设置 HTTPS 面板地址。Agent 与终端仍使用 WSS。
 
-```sh
-curl -fL --proto '=https' --proto-redir '=https' --tlsv1.2 https://raw.githubusercontent.com/coexacx/yuji-probe-rust/v0.10.2/install.sh -o /root/yuji-install.sh
-bash /root/yuji-install.sh
-```
-
-脚本询问域名、站点名称、管理员用户名、密码和证书条款，安装 Nginx、申请 Let's Encrypt 证书并配置自动续期。管理员密码为 12–72 字节，输入不回显。脚本通过标准输入传递密码，不放入命令行或环境变量。
-
-首次脚本依赖 GitHub HTTPS 与所选版本的可信性；请先阅读再执行。发行包会额外校验 Ed25519 签名、SHA-256、版本、架构和文件大小。
-
-已有网站、宝塔、占用的 80/443/19281 端口或现有安装会使脚本停止，防止覆盖。此时按下一节手动安装。安装所用 Python 3、curl、OpenSSL、Certbot 是部署与维护工具，不是后台常驻 Web 服务。自带有效证书时可用 `--cert-file` 与 `--key-file`；此时由自己维护证书续期。
-
-常用检查：
-
-```sh
-systemctl status yuji-probe --no-pager
-journalctl -u yuji-probe -n 50 --no-pager
-nginx -t
-systemctl list-timers yuji-probe-certbot.timer
-```
+若希望自主选择程序目录、系统用户和内部端口，使用下面的手动步骤。
 
 ## 二、宝塔或已有 Nginx 的手动安装
 
@@ -44,17 +26,17 @@ systemctl list-timers yuji-probe-certbot.timer
 
 ### 2. 下载完整发行包
 
-到 [v0.10.2 Release](https://github.com/coexacx/yuji-probe-rust/releases/tag/v0.10.2) 下载 `yuji-probe-rust-0.10.2.zip` 及同名 `.sha256` 文件。不要下载 GitHub 自动生成的 Source code 包：它没有预编译二进制。
+到 [v0.10.3 Release](https://github.com/coexacx/yuji-probe-rust/releases/tag/v0.10.3) 下载 `yuji-probe-rust-0.10.3.zip` 及同名 `.sha256` 文件。不要下载 GitHub 自动生成的 Source code 包：它没有预编译二进制。
 
 ```sh
 install -d -m 700 /root/yuji-rust-install
 cd /root/yuji-rust-install
-curl -fLO --proto '=https' --proto-redir '=https' https://github.com/coexacx/yuji-probe-rust/releases/download/v0.10.2/yuji-probe-rust-0.10.2.zip
-curl -fLO --proto '=https' --proto-redir '=https' https://github.com/coexacx/yuji-probe-rust/releases/download/v0.10.2/yuji-probe-rust-0.10.2.zip.sha256
-sha256sum -c yuji-probe-rust-0.10.2.zip.sha256
-unzip yuji-probe-rust-0.10.2.zip
+curl -fLO --proto '=https' --proto-redir '=https' https://github.com/coexacx/yuji-probe-rust/releases/download/v0.10.3/yuji-probe-rust-0.10.3.zip
+curl -fLO --proto '=https' --proto-redir '=https' https://github.com/coexacx/yuji-probe-rust/releases/download/v0.10.3/yuji-probe-rust-0.10.3.zip.sha256
+sha256sum -c yuji-probe-rust-0.10.3.zip.sha256
+unzip yuji-probe-rust-0.10.3.zip
 test ! -e /opt/yuji-probe-rust
-mv yuji-probe-rust-0.10.2 /opt/yuji-probe-rust
+mv yuji-probe-rust-0.10.3 /opt/yuji-probe-rust
 ```
 
 校验和用于核对下载内容；完整的签名校验由一键安装器和后台升级器执行。手动部署只从本仓库受信任的 Release 获取包和校验文件。
@@ -237,4 +219,4 @@ Agent 需更新到 0.2.2，安装/更新时会准备 tmux。SSH 终端、目录�
 
 ## 五、从原仓库的 rust-v0.10.0 切换
 
-已有 Rust 安装保留原域名、服务名、服务用户、端口和完整私有状态。下载本仓库发行包，仅替换程序，重新注册本仓库的更新服务。不要运行全新安装器覆盖原配置。具体操作和兼容边界见 [仓库迁移说明](仓库迁移-0.10.2.md)。
+已有 Rust 安装保留原域名、服务名、服务用户、端口和完整私有状态。下载本仓库发行包，仅替换程序，重新注册本仓库的更新服务。不要运行全新安装器覆盖原配置。具体操作和兼容边界见 [仓库迁移说明](仓库迁移-0.10.3.md)。

@@ -1,3 +1,5 @@
-# Nginx + Rust 部署
+# Debian 安装
 
-本仓库运行不需要 PHP-FPM 或数据库。请按 [完整部署教程](Nginx-Rust部署教程.md) 操作；已有 PHP 站点迁移前先保留程序、私有状态和 Nginx 配置。
+Rust 独立版当前安装方式请阅读 [Linux 一键安装](Linux一键安装.md)，HTTPS 配置请阅读 [反向代理文档](反向代理.md)。
+
+脚本仅询问站点名称，结束显示 IP:端口，不自动安装 Nginx 或申请证书。

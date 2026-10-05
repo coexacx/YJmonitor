@@ -87,7 +87,7 @@ fn options() -> Result<Options, &'static str> {
                     .next()
                     .ok_or("listen missing")?
                     .parse()
-                    .map_err(|_| "invalid loopback address")?
+                    .map_err(|_| "invalid listen address")?
             }
             "-origin" => o.origin = args.next().ok_or("origin missing")?,
             "-php-gateway" => o.gateway = true,
@@ -105,14 +105,14 @@ fn options() -> Result<Options, &'static str> {
             _ => return Err("unsupported argument"),
         }
     }
-    if !o.listen.ip().is_loopback() || o.listen.port() == 0 {
-        return Err("listen must be a loopback address");
+    if o.listen.port() == 0 || (!o.web && !o.listen.ip().is_loopback()) {
+        return Err("public listen requires native -web mode");
     }
     if o.reset_mfa && o.origin.is_empty() {
         o.origin = "https://localhost".into();
     }
     let url = reqwest::Url::parse(&o.origin).map_err(|_| "invalid HTTPS origin")?;
-    if url.scheme() != "https"
+    if (url.scheme() != "https" && !(o.web && url.scheme() == "http"))
         || url.host_str().is_none()
         || !url.username().is_empty()
         || url.password().is_some()
@@ -120,7 +120,10 @@ fn options() -> Result<Options, &'static str> {
         || url.fragment().is_some()
         || url.path() != "/"
     {
-        return Err("origin must be a canonical HTTPS origin");
+        return Err("origin must be a canonical HTTP(S) origin");
+    }
+    if url.scheme() == "https" && !o.listen.ip().is_loopback() {
+        return Err("HTTPS origin requires a loopback listener behind the local reverse proxy");
     }
     o.origin = url.as_str().trim_end_matches('/').into();
     if !o.dir.is_absolute() {
@@ -270,7 +273,7 @@ fn run() -> Result<(), &'static str> {
         }
         let input = serde_json::from_slice(&bytes).map_err(|_| "installation input invalid")?;
         setup::initialize(&o.dir, input)?;
-        println!("Installation complete. Open the configured HTTPS origin to sign in.");
+        println!("Installation complete. Open the configured panel address to sign in.");
         return Ok(());
     }
     if o.reset_mfa {
@@ -298,6 +301,9 @@ fn run() -> Result<(), &'static str> {
         let _lock = if o.worker { None } else { Some(lock(&o.dir)?) };
         if o.web {
             setup::recover(&o.dir)?;
+            if !o.dir.join("auth.json").exists() && o.origin.starts_with("http://") {
+                return Err("HTTP installation requires private --install initialization");
+            }
             if !o.dir.join("auth.json").exists() {
                 setup::serve(&o.dir, &o.origin, o.listen).await?;
             }
