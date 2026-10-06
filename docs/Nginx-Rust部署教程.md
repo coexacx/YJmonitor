@@ -1,4 +1,4 @@
-# Nginx + Rust 部署教程（0.11.0）
+# Nginx + Rust 部署教程（0.11.1）
 
 本发行版将页面、静态资源、网页安装向导、API、WSS 和业务主控放在一个 Rust 可执行文件里。运行时使用 Nginx 与一个主控进程，不启动 PHP-FPM，不需要数据库、Node.js 或 Rust 编译环境。源码包同时附带 amd64、arm64 二进制，实际只运行对应架构的一个。
 
@@ -8,7 +8,7 @@
 
 按照 [Linux 一键安装与管理菜单](Linux一键安装.md) 下载并执行当前安装脚本。只需填写站点名称，结束显示 IP:端口和自动生成的管理员密码。
 
-安装器不安装 Nginx、不申请证书、不占用 80/443；可在已有宝塔或网站的主机上安装。之后由用户按 [反向代理说明](反向代理.md) 手动配置 Nginx、证书，再从管理菜单设置 HTTPS 面板地址。Agent 与终端仍使用 WSS。
+安装器不安装 Nginx、不申请证书、不占用 80/443；可在已有宝塔或网站的主机上安装。安装后可选菜单 13 [自动配置 Nginx + HTTPS](自动HTTPS.md)，也可继续按 [反向代理说明](反向代理.md) 手动配置。Agent 与终端仍使用 WSS。
 
 若希望自主选择程序目录、系统用户和内部端口，使用下面的手动步骤。
 
@@ -26,17 +26,17 @@
 
 ### 2. 下载完整发行包
 
-到 [v0.11.0 Release](https://github.com/coexacx/yuji-probe-rust/releases/tag/v0.11.0) 下载 `yuji-probe-rust-0.11.0.zip` 及同名 `.sha256` 文件。不要下载 GitHub 自动生成的 Source code 包：它没有预编译二进制。
+到 [v0.11.1 Release](https://github.com/coexacx/yuji-probe-rust/releases/tag/v0.11.1) 下载 `yuji-probe-rust-0.11.1.zip` 及同名 `.sha256` 文件。不要下载 GitHub 自动生成的 Source code 包：它没有预编译二进制。
 
 ```sh
 install -d -m 700 /root/yuji-rust-install
 cd /root/yuji-rust-install
-curl -fLO --proto '=https' --proto-redir '=https' https://github.com/coexacx/yuji-probe-rust/releases/download/v0.11.0/yuji-probe-rust-0.11.0.zip
-curl -fLO --proto '=https' --proto-redir '=https' https://github.com/coexacx/yuji-probe-rust/releases/download/v0.11.0/yuji-probe-rust-0.11.0.zip.sha256
-sha256sum -c yuji-probe-rust-0.11.0.zip.sha256
-unzip yuji-probe-rust-0.11.0.zip
+curl -fLO --proto '=https' --proto-redir '=https' https://github.com/coexacx/yuji-probe-rust/releases/download/v0.11.1/yuji-probe-rust-0.11.1.zip
+curl -fLO --proto '=https' --proto-redir '=https' https://github.com/coexacx/yuji-probe-rust/releases/download/v0.11.1/yuji-probe-rust-0.11.1.zip.sha256
+sha256sum -c yuji-probe-rust-0.11.1.zip.sha256
+unzip yuji-probe-rust-0.11.1.zip
 test ! -e /opt/yuji-probe-rust
-mv yuji-probe-rust-0.11.0 /opt/yuji-probe-rust
+mv yuji-probe-rust-0.11.1 /opt/yuji-probe-rust
 ```
 
 校验和用于核对下载内容；完整的签名校验由一键安装器和后台升级器执行。手动部署只从本仓库受信任的 Release 获取包和校验文件。

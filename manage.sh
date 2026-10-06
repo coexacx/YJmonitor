@@ -17,9 +17,9 @@ while true; do
  yuji_columns=$(tput cols 2>/dev/null || printf 80)
  [[ "$yuji_columns" =~ ^[0-9]+$ ]] || yuji_columns=80
  if (( yuji_columns < 48 )); then
- printf '\n  维护\n    1  检查并更新\n    2  重启服务\n    3  启动服务\n    4  停止服务\n    5  查看日志\n    6  运行详情\n\n  配置与数据\n    7  设置访问地址\n    8  创建备份\n    9  重置二步验证\n   10  反向代理文档\n   11  回退上个版本\n   12  卸载程序\n\n    0  退出\n\n'
+ printf '\n  维护\n    1  检查并更新\n    2  重启服务\n    3  启动服务\n    4  停止服务\n    5  查看日志\n    6  运行详情\n\n  配置与数据\n    7  设置访问地址\n    8  创建备份\n    9  重置二步验证\n   10  反向代理文档\n   11  回退上个版本\n   12  卸载程序\n   13  配置 Nginx + HTTPS\n\n    0  退出\n\n'
  else
- printf '\n  维护\n    1  检查并更新       2  重启服务\n    3  启动服务         4  停止服务\n    5  查看日志         6  运行详情\n\n  配置与数据\n    7  设置访问地址     8  创建备份\n    9  重置二步验证    10  反向代理文档\n   11  回退上个版本     12  卸载程序\n\n    0  退出\n\n'
+ printf '\n  维护\n    1  检查并更新       2  重启服务\n    3  启动服务         4  停止服务\n    5  查看日志         6  运行详情\n\n  配置与数据\n    7  设置访问地址     8  创建备份\n    9  重置二步验证    10  反向代理文档\n   11  回退上个版本     12  卸载程序\n   13  配置 Nginx + HTTPS\n\n    0  退出\n\n'
  fi
  read -r -p '  选择：' yuji_choice || exit 0
  case "$yuji_choice" in
@@ -36,6 +36,7 @@ while true; do
   10) printf '\n  https://github.com/coexacx/yuji-probe-rust/blob/main/docs/反向代理.md\n';;
   11) python3 "$YUJI_OPS" rollback || true;;
   12) python3 "$YUJI_OPS" uninstall || true; [[ -f "$YUJI_OPS" ]] || exit 0;;
+  13) python3 "$YUJI_OPS" https || true;;
   *) printf '\n  请输入菜单中的编号。\n';;
  esac
  read -r -p $'\n  按回车返回…' _ || exit 0

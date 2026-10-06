@@ -1,6 +1,6 @@
 # Linux 一键部署与维护
 
-本页适用于羽迹探针 Rust 独立版 0.11.0。安装器下载预编译发行包，不在用户服务器上编译 Rust，不需要数据库或 PHP。
+本页适用于羽迹探针 Rust 独立版 0.11.1。安装器下载预编译发行包，不在用户服务器上编译 Rust，不需要数据库或 PHP。
 
 ## 安装
 
@@ -8,7 +8,7 @@
 
 ~~~sh
 curl -fL --proto '=https' --proto-redir '=https' --tlsv1.2 \
-  https://raw.githubusercontent.com/coexacx/yuji-probe-rust/v0.11.0/install.sh \
+  https://raw.githubusercontent.com/coexacx/yuji-probe-rust/v0.11.1/install.sh \
   -o /root/yuji-install.sh
 bash /root/yuji-install.sh
 ~~~
@@ -23,7 +23,7 @@ bash /root/yuji-install.sh
 
 用安装结束显示的 HTTP 地址查看面板，初始管理员为 admin，密码随机生成。初始凭据保存在 /etc/yuji-probe/initial-admin.json，仅 root 可读。更改密码后可以删除此文件。
 
-HTTP 不加密。添加节点与使用终端前，按 [反向代理文档](反向代理.md) 自行配置域名、Nginx 和证书，再在管理菜单中设置 HTTPS 入口。主控与 Agent 始终使用 WSS，不因初始 HTTP 访问入口而降级。
+HTTP 不加密。添加节点与使用终端前，可以选择菜单 13，填写已解析域名，自动配置 Nginx、证书和 HTTPS 入口；Cloudflare 橙云支持见 [自动 HTTPS](自动HTTPS.md)。也可按 [反向代理文档](反向代理.md) 手动配置。主控与 Agent 始终使用 WSS，不因初始 HTTP 访问入口而降级。
 
 ## 管理菜单
 
@@ -44,11 +44,12 @@ sudo yuji-probe
 | 10 | 打开反向代理文档地址 |
 | 11 | 回退到上次升级前的程序和数据，需要明确确认 |
 | 12 | 卸载程序和管理服务，保留面板数据 |
+| 13 | 配置 Nginx、HTTPS、反向代理和证书自动续期 |
 | 0 | 退出 |
 
 菜单兼容窄终端，NO_COLOR=1 可关闭颜色。日志默认显示最近 80 行，不会让菜单停留在持续刷新的日志流中。
 
-命令行也可以运行 yuji-probe summary、yuji-probe restart、yuji-probe backup。现有宝塔手动安装的服务路径不同，不要将此菜单直接用于管理旧实例；继续使用后台的签名更新与对应 systemd 服务。
+命令行也可以运行 yuji-probe summary、yuji-probe restart、yuji-probe backup、yuji-probe https。现有宝塔手动安装的服务路径不同，不要将此菜单直接用于管理旧实例；继续使用后台的签名更新与对应 systemd 服务。
 
 ## 路径与备份
 

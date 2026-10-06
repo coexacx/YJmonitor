@@ -114,6 +114,8 @@ def reset_mfa():
 def uninstall():
  print('\n  卸载程序及管理服务，保留 /var/lib/yuji-probe 和 /etc/yuji-probe。')
  if input('  输入 UNINSTALL 确认：')!='UNINSTALL':return
+ import nginx_setup
+ nginx_setup.unconfigure()
  for service in [SERVICE,'yuji-probe-rust-update-main.path','yuji-probe-rust-update-main.service']:
   subprocess.run(['systemctl','disable','--now',service],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
   (pathlib.Path('/etc/systemd/system')/service).unlink(missing_ok=True)
@@ -132,9 +134,16 @@ def main():
   elif action=='rollback':update(True)
   elif action=='backup':backup()
   elif action=='address':address()
+  elif action=='https':
+   import nginx_setup
+   m=helper();cfg=trusted(pathlib.Path('/etc/yuji-probe-rust-updaters/main.json'))
+   work=m.BASE/cfg['name'];m.private(work)
+   with (work/'lock').open('a') as update_lock:
+    fcntl.flock(update_lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
+    nginx_setup.setup(settings(),configure,STATE)
   elif action=='reset-mfa':reset_mfa()
   elif action=='uninstall':uninstall()
-  else:raise ValueError('可用命令：summary/start/stop/restart/update/rollback/backup/address/reset-mfa/uninstall')
+  else:raise ValueError('可用命令：summary/start/stop/restart/update/rollback/backup/address/https/reset-mfa/uninstall')
 if __name__=='__main__':
  try:main()
  except (Exception,KeyboardInterrupt) as e:print('\n  操作未完成：'+str(e),file=sys.stderr);sys.exit(1)

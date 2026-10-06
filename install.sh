@@ -3,8 +3,8 @@ set +x
 set -Eeuo pipefail
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 umask 077
-readonly YUJI_VERSION=0.11.0
-readonly YUJI_RELEASE_BASE=https://github.com/coexacx/yuji-probe-rust/releases/download/v0.11.0
+readonly YUJI_VERSION=0.11.1
+readonly YUJI_RELEASE_BASE=https://github.com/coexacx/yuji-probe-rust/releases/download/v0.11.1
 readonly YUJI_PUBLIC_KEY=o8+DdHbo82V7fxJEIiEhe5AK/frR91Fz5vjf/pDAnts=
 yuji_work='' yuji_name='' yuji_port=19281 yuji_cache='' yuji_check=0
 die(){ printf '\n  %s\n\n' "$*" >&2; exit 1; }
@@ -18,7 +18,7 @@ while (( $# )); do
    shift 2;;
   --check) yuji_check=1;shift;;
   -h|--help)
-   printf '%s\n' '羽迹探针 · Rust' '' '用法：bash install.sh [--site-name 站点名称] [--port 19281]' '      bash install.sh --check' '' '交互安装只需填写站点名称。自动生成管理员密码，显示 IP:端口。' '支持 Debian 12/13、Ubuntu 22.04/24.04/26.04、Rocky/AlmaLinux 9/10、' 'CentOS Stream 9/10、Fedora 42/43/44，amd64/arm64，systemd。' '不安装 Nginx，不申请证书。HTTPS 反向代理见 docs/反向代理.md。'
+   printf '%s\n' '羽迹探针 · Rust' '' '用法：bash install.sh [--site-name 站点名称] [--port 19281]' '      bash install.sh --check' '' '交互安装只需填写站点名称。自动生成管理员密码，显示 IP:端口。' '支持 Debian 12/13、Ubuntu 22.04/24.04/26.04、Rocky/AlmaLinux 9/10、' 'CentOS Stream 9/10、Fedora 42/43/44，amd64/arm64，systemd。' '基础安装不改动 Nginx；安装后可在菜单 13 自动配置 Nginx + HTTPS。'
    exit 0;;
   *) die "未知参数：$1";;
  esac
@@ -176,5 +176,6 @@ import json
 d=json.load(open('/etc/yuji-probe/initial-admin.json'))
 print('  访问地址  '+d['url']+'\n  管理员    '+d['username']+'\n  初始密码  '+d['password'])
 print('\n  管理菜单  yuji-probe\n  反向代理  https://github.com/coexacx/yuji-probe-rust/blob/main/docs/反向代理.md')
+print('\n  自动 HTTPS：运行 sudo yuji-probe，选择 13。域名需已解析到本机。')
 print('\n  初始凭据保存在 /etc/yuji-probe/initial-admin.json（仅 root 可读）。')
 PYSHOW
