@@ -1,6 +1,6 @@
 # Linux 一键部署与维护
 
-本页适用于羽迹探针 Rust 独立版 0.10.3。安装器下载预编译发行包，不在用户服务器上编译 Rust，不需要数据库或 PHP。
+本页适用于羽迹探针 Rust 独立版 0.11.0。安装器下载预编译发行包，不在用户服务器上编译 Rust，不需要数据库或 PHP。
 
 ## 安装
 
@@ -8,7 +8,7 @@
 
 ~~~sh
 curl -fL --proto '=https' --proto-redir '=https' --tlsv1.2 \
-  https://raw.githubusercontent.com/coexacx/yuji-probe-rust/v0.10.3/install.sh \
+  https://raw.githubusercontent.com/coexacx/yuji-probe-rust/v0.11.0/install.sh \
   -o /root/yuji-install.sh
 bash /root/yuji-install.sh
 ~~~

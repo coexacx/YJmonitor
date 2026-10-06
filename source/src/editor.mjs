@@ -2,7 +2,7 @@ import {EditorState, Compartment} from '@codemirror/state';
 import {EditorView, lineNumbers, highlightActiveLineGutter, keymap, highlightActiveLine, drawSelection} from '@codemirror/view';
 import {defaultKeymap, history, historyKeymap, indentWithTab} from '@codemirror/commands';
 import {search, searchKeymap, openSearchPanel} from '@codemirror/search';
-import {syntaxHighlighting, defaultHighlightStyle, StreamLanguage, bracketMatching} from '@codemirror/language';
+import {syntaxHighlighting, HighlightStyle, StreamLanguage, bracketMatching} from '@codemirror/language';
 import {javascript} from '@codemirror/lang-javascript';
 import {json} from '@codemirror/lang-json';
 import {css} from '@codemirror/lang-css';
@@ -11,6 +11,19 @@ import {python} from '@codemirror/lang-python';
 import {yaml} from '@codemirror/lang-yaml';
 import {shell} from '@codemirror/legacy-modes/mode/shell';
 import {diffLines} from 'diff';
+import {tags} from '@lezer/highlight';
+// The editor retains the original dark PHP palette independently of the white
+// workspace chrome. Light-theme syntax colors are unreadable on this surface.
+const editorHighlight=HighlightStyle.define([
+ {tag:tags.comment,color:'#9bb0bd'},
+ {tag:[tags.keyword,tags.modifier,tags.operatorKeyword],color:'#cbb9ed'},
+ {tag:[tags.string,tags.regexp],color:'#b5d6c5'},
+ {tag:[tags.number,tags.bool,tags.null],color:'#e4c193'},
+ {tag:[tags.typeName,tags.className,tags.tagName],color:'#8dcfd0'},
+ {tag:[tags.propertyName,tags.attributeName],color:'#a9cce6'},
+ {tag:[tags.meta,tags.annotation],color:'#b5c6d9'},
+ {tag:tags.invalid,color:'#f0aaa6',textDecoration:'underline'}
+]);
 const lang=path=>{const ext=path.split('.').pop().toLowerCase();if(['js','mjs','cjs','ts','tsx','jsx'].includes(ext))return javascript({typescript:ext.startsWith('t'),jsx:ext.endsWith('x')});if(ext==='json')return json();if(ext==='css')return css();if(['html','htm','xml','svg'].includes(ext))return html();if(ext==='py')return python();if(['yaml','yml'].includes(ext))return yaml();if(['sh','bash','zsh'].includes(ext)||/\/\.(bashrc|profile)$/.test(path))return StreamLanguage.define(shell);return [];};
 export function createEditor(input,save){
  const mount=document.createElement('div');mount.className='file-code-editor';input.after(mount);input.hidden=true;
@@ -18,12 +31,25 @@ export function createEditor(input,save){
  const view=new EditorView({parent:mount,state:EditorState.create({doc:input.value,extensions:[
  EditorState.phrases.of({'Find':'查找','Replace':'替换','next':'下一个','previous':'上一个','all':'全选','match case':'区分大小写','by word':'完整单词','regexp':'正则表达式','replace':'替换','replace all':'全部替换','close':'关闭','current match':'当前匹配','replaced $ matches':'已替换 $ 处'}),
  lineNumbers(),highlightActiveLineGutter(),history(),drawSelection(),highlightActiveLine(),bracketMatching(),
- syntaxHighlighting(defaultHighlightStyle),search({top:true}),
+ syntaxHighlighting(editorHighlight),search({top:true}),
  keymap.of([{key:'Mod-s',run:()=>{save();return true;}},...defaultKeymap,...historyKeymap,...searchKeymap,indentWithTab]),
  readonly.of(EditorState.readOnly.of(false)),language.of([]),wrap.of([]),
  EditorView.contentAttributes.of({'aria-label':'文件内容',spellcheck:'false',autocapitalize:'off',autocorrect:'off'}),
  EditorView.updateListener.of(u=>{if(u.docChanged&&!updating){input.value=u.state.doc.toString();input.dispatchEvent(new Event('input'));}}),
- EditorView.theme({'&':{height:'100%',color:'inherit',backgroundColor:'transparent'},'.cm-scroller':{overflow:'auto',fontFamily:'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',fontSize:'13px',lineHeight:'1.6'},'.cm-content':{padding:'12px 0',caretColor:'currentColor'},'.cm-gutters':{backgroundColor:'transparent',color:'inherit',borderRight:'1px solid #8883'},'.cm-activeLine,.cm-activeLineGutter':{backgroundColor:'#80808015'},'.cm-panels':{backgroundColor:'transparent',color:'inherit'},'.cm-search input':{color:'inherit',backgroundColor:'transparent',maxWidth:'160px'},'.cm-selectionBackground':{backgroundColor:'#659bbc55 !important'},'.cm-cursor':{borderLeftColor:'currentColor'}})
+ EditorView.theme({
+  '&':{height:'100%',color:'#d7e3eb',backgroundColor:'#111c25'},
+  '.cm-scroller':{overflow:'auto',fontFamily:'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',fontSize:'13px',lineHeight:'1.6'},
+  '.cm-content':{padding:'12px 0',caretColor:'#c8e6dc'},
+  '.cm-gutters':{backgroundColor:'#111c25',color:'#9bb0bd',borderRight:'1px solid #263b46'},
+  '.cm-activeLine,.cm-activeLineGutter':{backgroundColor:'#1b2b36'},
+  '.cm-panels':{backgroundColor:'#192a33',color:'#d7e3eb'},
+  '.cm-search input':{color:'#d7e3eb',backgroundColor:'#111c25',maxWidth:'160px'},
+  '.cm-selectionBackground':{backgroundColor:'#406584 !important'},
+  '.cm-cursor':{borderLeftColor:'#c8e6dc'},
+  '.cm-searchMatch':{backgroundColor:'#50613880',outline:'1px solid #8fae65'},
+  '.cm-searchMatch-selected':{backgroundColor:'#40658480',outline:'1px solid #8fb6d4'},
+  '&.cm-focused .cm-matchingBracket':{backgroundColor:'#40658480',color:'#fff'}
+ },{dark:true})
  ]})});
  function sync(path='',reset=false){updating=true;const text=input.value;const changes=view.state.doc.toString()===text?undefined:{from:0,to:view.state.doc.length,insert:text};view.dispatch({changes,effects:[readonly.reconfigure(EditorState.readOnly.of(input.readOnly||input.disabled)),...(path?[language.reconfigure(lang(path))]:[])]});updating=false;if(reset)view.dispatch({selection:{anchor:0}});}
  return {sync,wrap:value=>view.dispatch({effects:wrap.reconfigure(value?EditorView.lineWrapping:[])}),search:()=>openSearchPanel(view),focus:()=>view.focus(),destroy:()=>{view.destroy();mount.remove();}};

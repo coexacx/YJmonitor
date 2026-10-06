@@ -16,9 +16,10 @@ done
 pub(super) struct Inspector {
     previous: HashMap<(u32, u64), u64>,
     sampled: Option<Instant>,
+    system: Option<(Instant, Value)>,
 }
 pub(super) fn action(s: &str) -> bool {
-    matches!(s, "processes" | "services" | "service_logs")
+    matches!(s, "processes" | "services" | "service_logs" | "system")
 }
 fn valid_unit(unit: &str) -> bool {
     !unit.starts_with('-')
@@ -62,6 +63,22 @@ impl Inspector {
         client: &ssh::Client,
         r: &Request,
     ) -> Result<Value, Problem> {
+        if r.action == "system" {
+            if r.path != "/" || !r.target.is_empty() || !r.content.is_empty() || r.offset != 0 {
+                return Err(error("invalid", "监测请求参数不正确"));
+            }
+            if let Some((at, data)) = &self.system
+                && at.elapsed() < Duration::from_secs(10)
+            {
+                return Ok(data.clone());
+            }
+            let raw = ssh::exec(client, "/bin/sh -s", SYSTEM_SCRIPT.as_bytes(), 32768)
+                .await
+                .map_err(|_| error("unavailable", "系统监测暂不可用"))?;
+            let data = system_result(&raw);
+            self.system = Some((Instant::now(), data.clone()));
+            return Ok(data);
+        }
         if r.action == "processes" {
             if !["", "cpu", "memory"].contains(&r.target.as_str()) {
                 return Err(error("invalid", "进程排序方式不正确"));
@@ -201,5 +218,104 @@ mod tests {
         let p = process(&line, 4096).unwrap();
         assert_eq!((p.pid, p.start, p.ticks, p.rss), (42, 100, 140, 20480));
         assert_eq!(p.name, "test ) name");
+    }
+}
+
+// Read filesystem counters only: no recursive directory walk and no user input.
+// A local-filesystem filter avoids network mounts; timeout bounds a stuck disk.
+const SYSTEM_SCRIPT: &str = r#"export LC_ALL=C
+printf 'LOAD '; cat /proc/loadavg 2>/dev/null
+printf '\n'
+if command -v timeout >/dev/null 2>&1 && command -v df >/dev/null 2>&1; then
+  timeout -s TERM -k 1 3s df -Pk -l -x tmpfs -x devtmpfs -x squashfs 2>/dev/null
+fi
+exit 0
+"#;
+fn filesystem(line: &str) -> Option<Value> {
+    // Locate the percentage field; the device and mount path can contain spaces.
+    for (i, _) in line.match_indices('%') {
+        let prefix = &line[..i];
+        let mut fields = prefix.split_ascii_whitespace().rev();
+        let Some(percent) = fields.next().and_then(|v| v.parse::<u64>().ok()) else {
+            continue;
+        };
+        if percent > 1000 {
+            continue;
+        }
+        let counts: Option<Vec<u64>> = fields
+            .by_ref()
+            .take(3)
+            .map(|v| v.parse::<u64>().ok()?.checked_mul(1024))
+            .collect();
+        let Some(counts) = counts.filter(|v| v.len() == 3 && v[2] > 0) else {
+            continue;
+        };
+        if fields.next().is_none() {
+            continue;
+        }
+        let tail = &line[i + 1..];
+        if !tail.starts_with([' ', '\t']) {
+            continue;
+        }
+        let path = tail.trim_start_matches([' ', '\t']);
+        if !path.starts_with('/') || path.len() > 4096 || path.chars().any(char::is_control) {
+            continue;
+        }
+        let total = counts[2];
+        return Some(json!({"path":path,"total":total,
+            "available":counts[0].min(total),"used":counts[1].min(total)}));
+    }
+    None
+}
+fn system_result(raw: &str) -> Value {
+    let load: Vec<f64> = raw
+        .lines()
+        .find_map(|line| line.strip_prefix("LOAD "))
+        .unwrap_or("")
+        .split_ascii_whitespace()
+        .take(3)
+        .filter_map(|s| s.parse::<f64>().ok().filter(|n| n.is_finite() && *n >= 0.))
+        .collect();
+    let mut paths = std::collections::HashSet::new();
+    let volumes: Vec<_> = raw
+        .lines()
+        .take(512)
+        .filter_map(filesystem)
+        .filter(|v| paths.insert(v["path"].as_str().unwrap_or("").to_owned()))
+        .take(128)
+        .collect();
+    json!({"load":if load.len()==3 {json!(load)}else{json!([])},
+        "filesystems":volumes,"at":now()})
+}
+#[cfg(test)]
+mod filesystem_tests {
+    use super::*;
+    #[test]
+    fn available_is_not_total_minus_used_and_mount_spaces_are_preserved() {
+        let value = system_result(
+            "LOAD 0.10 1.25 2.40 1/42 123\nFilesystem 1024-blocks Used Available Capacity Mounted on\n/dev/sda 100 30 65 30% /\n/dev/path with spaces 200 90 100 45% /mnt/a b% c\n/dev/sda 100 30 65 30% /\n",
+        );
+        assert_eq!(value["load"], json!([0.1, 1.25, 2.4]));
+        assert_eq!(value["filesystems"].as_array().unwrap().len(), 2);
+        assert_eq!(value["filesystems"][0]["available"], 65 * 1024);
+        assert_eq!(value["filesystems"][0]["total"], 100 * 1024);
+        assert_eq!(value["filesystems"][1]["path"], "/mnt/a b% c");
+    }
+    #[test]
+    fn reject_overflow_control_bytes_malformed_counters_and_unavailable_data() {
+        for line in [
+            "/dev/sda 1 1 1 1% relative",
+            "/dev/sda 1 1 1 1% /bad\u{1b}name",
+            "/dev/sda 18446744073709551615 1 1 1% /",
+            "/dev/sda 1 -1 1 1% /",
+            "/dev/sda 0 0 0 0% /",
+            "/dev/sda 1 1 1 1%/malformed",
+        ] {
+            assert!(filesystem(line).is_none(), "{line}");
+        }
+        let data = system_result("LOAD NaN inf -1\n");
+        assert_eq!(data["load"], json!([]));
+        assert_eq!(data["filesystems"], json!([]));
+        assert!(!action("root_usage"));
     }
 }

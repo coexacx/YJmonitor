@@ -19,7 +19,7 @@ Nginx + Rust 单二进制服务器探针。页面、网页安装向导、API 与
 ## 一键安装与管理
 
 ~~~sh
-curl -fL --proto '=https' --proto-redir '=https' --tlsv1.2 https://raw.githubusercontent.com/coexacx/yuji-probe-rust/v0.10.3/install.sh -o /root/yuji-install.sh
+curl -fL --proto '=https' --proto-redir '=https' --tlsv1.2 https://raw.githubusercontent.com/coexacx/yuji-probe-rust/v0.11.0/install.sh -o /root/yuji-install.sh
 bash /root/yuji-install.sh
 ~~~
 
@@ -31,7 +31,7 @@ bash /root/yuji-install.sh
 
 ## 发行内容
 
-主控 0.10.3，Agent 0.2.2。[终端滚动与输出记录说明](docs/终端回滚记录-0.10.2.md)。完整包为 **yuji-probe-rust-0.10.3.zip**，包含 amd64 / arm64 预编译主控与完整源码；Agent 二进制、签名清单及安装脚本在同一 Release。GitHub 自动生成的 Source code 包不含主控二进制。
+主控 0.11.0，Agent 0.2.2。[新版终端工作区](docs/终端工作区-0.11.0.md)。[终端滚动与输出记录说明](docs/终端回滚记录-0.10.2.md)。完整包为 **yuji-probe-rust-0.11.0.zip**，包含 amd64 / arm64 预编译主控与完整源码；Agent 二进制、签名清单及安装脚本在同一 Release。GitHub 自动生成的 Source code 包不含主控二进制。
 
 更新只检查本仓库 v* 正式发行版。下载核对 Ed25519 签名、版本、架构、长度与 SHA-256，失败即停止。普通用户不需要 GitHub Token 或编译环境。
 

@@ -3,8 +3,8 @@ set +x
 set -Eeuo pipefail
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 umask 077
-readonly YUJI_VERSION=0.10.3
-readonly YUJI_RELEASE_BASE=https://github.com/coexacx/yuji-probe-rust/releases/download/v0.10.3
+readonly YUJI_VERSION=0.11.0
+readonly YUJI_RELEASE_BASE=https://github.com/coexacx/yuji-probe-rust/releases/download/v0.11.0
 readonly YUJI_PUBLIC_KEY=o8+DdHbo82V7fxJEIiEhe5AK/frR91Fz5vjf/pDAnts=
 yuji_work='' yuji_name='' yuji_port=19281 yuji_cache='' yuji_check=0
 die(){ printf '\n  %s\n\n' "$*" >&2; exit 1; }
@@ -57,10 +57,10 @@ printf '\n  正在准备运行环境…\n'
 if [[ "$yuji_platform" == apt ]]; then
  export DEBIAN_FRONTEND=noninteractive
  apt-get update -qq
- apt-get install -y --no-install-recommends ca-certificates curl openssl python3 iproute2 util-linux
+ apt-get install -y --no-install-recommends ca-certificates curl openssl python3 iproute2 util-linux iputils-tracepath
 else
  yuji_curl_package=();command -v curl >/dev/null || yuji_curl_package=(curl-minimal)
- dnf install -y ca-certificates "${yuji_curl_package[@]}" openssl python3 iproute util-linux
+ dnf install -y ca-certificates "${yuji_curl_package[@]}" openssl python3 iproute util-linux iputils
 fi
 [[ -z "$(ss -H -ltn "( sport = :$yuji_port )")" ]] || die "端口 $yuji_port 已被使用，请用 --port 指定其他端口。"
 yuji_work=$(mktemp -d /var/tmp/yuji-probe-install.XXXXXXXX)

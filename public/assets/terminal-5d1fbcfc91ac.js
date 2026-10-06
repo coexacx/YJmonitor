@@ -1,13 +1,13 @@
-import {createTerminalMonitor,createRouteView} from './terminal-monitor.mjs';
-import {terminalAppearance} from './terminal-appearance.mjs';
-import {TerminalRetry,canRetryRequest,canRetryClose} from './terminal-retry.mjs';
-import {createTerminalKeys} from './terminal-keys.mjs';
-import {SearchAddon} from './addon-search.mjs';
-import {createFileBrowser} from './files.mjs';
-import {findTransferContext} from './transfers.mjs';
+import {createTerminalMonitor,createRouteView} from "/assets/terminal-monitor-be68a4697cbd.js";
+import {terminalAppearance} from "/assets/terminal-appearance-57b3a886f0d5.js";
+import {TerminalRetry,canRetryRequest,canRetryClose} from "/assets/terminal-retry-9f33960c93a8.js";
+import {createTerminalKeys} from "/assets/terminal-keys-54aad77e70fd.js";
+import {SearchAddon} from "/assets/search-3ea90162233f.js";
+import {createFileBrowser} from "/assets/files-99d6821e65f3.js";
+import {findTransferContext} from "/assets/transfers-e30ce1961db2.js";
 const transferClaims=new Set();
-import {Terminal} from './xterm.mjs';
-import {FitAddon} from './addon-fit.mjs';
+import {Terminal} from "/assets/xterm-b336ec65a086.js";
+import {FitAddon} from "/assets/fit-2d87e1bddc73.js";
 function createSession(api,root,dialog,onClose,onState,getRecord){
  const $=s=>root.querySelector(s),mount=$('#terminal-mount'),placeholder=$('.terminal-placeholder'),connect=$('#terminal-connect'),disconnect=$('#terminal-disconnect');
  let socket=null,term=null,fit=null,search=null,sendInput=()=>{},resize=null,touch=null,current=null,generation=0,connected=false,commands=[],transferSession='',shellSession='',lookedForTransfers=false;

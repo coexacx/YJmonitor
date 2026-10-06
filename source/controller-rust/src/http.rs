@@ -150,6 +150,9 @@ async fn api(
         if c.path.starts_with("/api/admin/theme") && c.method != "GET" {
             return crate::theme::change(app.clone(), c, bytes).await;
         }
+        if c.path == "/api/admin/terminal-route" && c.method == "POST" {
+            return crate::diagnostics::api(app.clone(), c, bytes);
+        }
         dispatch(&app, &c, &bytes)
     };
     crate::web::secure(

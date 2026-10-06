@@ -4,6 +4,7 @@ mod backup;
 mod billing;
 mod core;
 mod deploy;
+mod diagnostics;
 mod enrollment;
 mod file_sessions;
 mod files;

@@ -1,0 +1,202 @@
+/* Layout additions use the original terminal typography and controls. */
+#terminal-dialog{--text:#283643;--muted:#657583;--quiet:#80909a;--accent:#327ba3;--line:#dfe5ea;--edge:#cbd4db;--glass:#fff;--glass-strong:#f5f8fa;--inset:#f6f8fa;--dialog:#fff;--accent-wash:#eaf3f8;--focus:#75aac7;--warning:#a03b39;--file-width:254px;--bottom-height:208px;--theme-button-color:#357b9f;--theme-button-text:#fff;color-scheme:light;color:#283643;background:#fff!important;border:1px solid #bbc8d1!important;border-radius:19px!important;backdrop-filter:none!important;-webkit-backdrop-filter:none!important;box-shadow:0 30px 100px rgba(0,0,0,.4)!important;width:min(1240px,calc(100vw - 64px));height:min(760px,calc(100dvh - 48px));max-height:calc(100dvh - 16px);font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;font-size:14px;line-height:1.5}
+#terminal-dialog.is-expanded{width:calc(100vw - 16px);height:calc(100dvh - 16px)}
+#terminal-dialog [hidden]{display:none!important}
+#terminal-dialog button,#terminal-dialog select{color:#344955;border-color:#d6e0e6;background:#fff;font-family:inherit;box-shadow:none;border-radius:7px}
+#terminal-dialog button:disabled{opacity:.4;cursor:default}
+#terminal-dialog button:focus-visible,#terminal-dialog input:focus-visible{outline:2px solid #5099c0;outline-offset:-2px}
+#terminal-dialog button:hover:not(:disabled){background:#edf4f8}
+#terminal-dialog .ssh-session-bar{position:relative;gap:2px;padding:4px 125px 4px 6px;background:#fff;min-height:38px;border-bottom:1px solid #dfe5ea;flex-wrap:nowrap}
+#terminal-dialog .ssh-session-tabs{flex:0 1 auto;gap:3px;min-width:0}
+#terminal-dialog .ssh-session-tab{background:#fff;border:1px solid #e1e7eb;border-radius:7px}
+#terminal-dialog .ssh-session-tab.active{background:#f0f6fa;border-color:#afc6d5}
+#terminal-dialog .ssh-session-tab button:first-child{display:flex;align-items:center;gap:7px;max-width:230px;font-size:12px}
+#terminal-dialog .ssh-session-tab button span{overflow:hidden;text-overflow:ellipsis}
+#terminal-dialog .ssh-session-tab button{color:#344955;background:transparent;padding:5px 8px}
+#terminal-dialog .ssh-session-tab button:last-child{color:#8a959d;padding-left:3px}
+#terminal-dialog .ssh-tab-dot{display:inline-block;width:7px;height:7px;flex:0 0 7px;border-radius:50%;background:#a2adb5}
+#terminal-dialog .ssh-tab-dot.connected{background:#4d9e5f}
+#terminal-dialog .ssh-add-session{font-size:25px;font-weight:700;line-height:26px;flex:0 0 34px;padding:0 5px;color:#344955}
+#terminal-dialog .ssh-server-picker{position:absolute;z-index:15;top:100%;left:10px;width:280px;max-width:calc(100vw - 50px);max-height:320px;overflow:auto;background:#fff;border:1px solid #cbd7df;box-shadow:0 8px 24px #152d4326;border-radius:5px;padding:5px}
+#terminal-dialog .ssh-server-picker button{display:flex;justify-content:space-between;align-items:center;gap:12px;width:100%;padding:9px;text-align:left}
+#terminal-dialog .ssh-server-picker strong{font-weight:500;overflow:hidden;text-overflow:ellipsis}
+#terminal-dialog .ssh-server-picker span{color:#73828d;font-size:11px}
+#terminal-dialog .terminal-header{position:absolute;right:7px;top:4px;z-index:2;padding:0;border:0;background:transparent;min-height:0}
+#terminal-dialog .terminal-actions{display:flex;gap:5px}
+#terminal-dialog .terminal-actions button{padding:5px 10px;border:1px solid #dce4e9;font-size:12px}
+#terminal-dialog .terminal-toolbar{display:flex;align-items:center;gap:7px;padding:5px 9px;min-height:37px;background:#fff;border-bottom:1px solid #dce4e9;flex-wrap:nowrap}
+#terminal-dialog .terminal-toolbar>button{border:1px solid #dce4e9;padding:4px 10px;white-space:nowrap}
+#terminal-dialog .terminal-quickbar{padding:0;margin-left:auto;background:#fff;border:0;gap:5px;min-width:0}
+#terminal-dialog .terminal-quickbar select{min-width:100px;max-width:180px;padding:3px 6px;border:1px solid #dce4e9}
+#terminal-dialog .terminal-quickbar button{padding:3px 9px;border:1px solid #dce4e9}
+#terminal-dialog .terminal-workspace,#terminal-dialog .terminal-main{background:#fff!important}
+#terminal-dialog .terminal-main{min-height:0}
+#terminal-dialog .terminal-pane,#terminal-dialog .terminal-screen,#terminal-dialog .xterm-viewport,#terminal-dialog #terminal-mount{background:#183447!important}
+#terminal-dialog .terminal-pane{flex:1 1 0;min-height:100px}
+#terminal-dialog #terminal-mount{padding:14px 8px 8px 14px}
+#terminal-dialog .terminal-placeholder,#terminal-dialog .terminal-placeholder h3,#terminal-dialog .terminal-hint{color:#cddce6}
+#terminal-dialog .terminal-footer{padding:3px 10px;min-height:23px;background:#fff;color:#778691;border-top:1px solid #e1e7eb;font-size:10px}
+#terminal-dialog #terminal-footer-state{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#terminal-dialog .file-sidebar{position:relative;background:#fff;color:#344955;overflow:auto;flex:0 0 var(--file-width);width:var(--file-width);min-width:220px;padding:10px 12px 0;scrollbar-color:#c9d4db transparent;backdrop-filter:none}
+#terminal-dialog #terminal-monitor{flex:none}
+#terminal-dialog .terminal-node-ip{font:550 12px ui-monospace,monospace;padding-right:18px;overflow-wrap:anywhere;margin-bottom:4px;color:#253d4d}
+#terminal-dialog .terminal-system-line{font-size:11px;color:#76848c;line-height:1.8;font-variant-numeric:tabular-nums}
+#terminal-dialog .terminal-resource{font-size:11px;margin-top:10px}
+#terminal-dialog .terminal-resource>div:first-child{display:flex;align-items:center;justify-content:space-between;gap:8px;color:#4f646d;font-variant-numeric:tabular-nums}
+#terminal-dialog .terminal-resource-track{height:5px;margin-top:6px;border-radius:4px;overflow:hidden;background:rgba(48,84,98,.09)}
+#terminal-dialog .terminal-resource-track i{display:block;height:100%;border-radius:4px;background:#66a699;transition:width .35s ease}
+#terminal-dialog .terminal-mini-chart{margin-top:13px}
+#terminal-dialog .terminal-chart-heading{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:2px 5px;font-size:10px;color:#63747f}
+#terminal-dialog .terminal-chart-heading strong{font-weight:500;color:#344955}
+#terminal-dialog .terminal-chart-heading>span{font:10px ui-monospace,monospace}
+#terminal-dialog .terminal-network-select{max-width:100%;font-size:10px;max-height:23px;border:1px solid #e1e7eb;margin:3px 0}
+#terminal-dialog .terminal-mini-chart svg{display:block;width:100%;height:65px}
+#terminal-dialog .terminal-chart-axis{display:flex;justify-content:space-between;font-size:9px;color:#657b89}
+#terminal-dialog .terminal-network-totals{font-size:10px;color:#6d7f89;margin-top:3px;font-variant-numeric:tabular-nums}
+#terminal-dialog .terminal-root-heading{display:flex;justify-content:space-between;padding:10px 0 5px;border-top:1px solid #e6ebee;margin-top:6px;font-size:11px}
+#terminal-dialog .terminal-root-heading strong{font-weight:500}
+#terminal-dialog .terminal-root-heading span{color:#657b89;font-size:10px}
+#terminal-dialog .file-tree{flex:none;overflow:visible;padding:0}
+#terminal-dialog .file-tree-row{min-width:0;padding:0;min-height:27px;border-radius:3px}
+#terminal-dialog .file-tree-row:hover{background:#f0f6fa}
+#terminal-dialog .file-tree-target{color:#344955;font-size:11px;min-width:0;padding:4px 0;gap:6px}
+#terminal-dialog .file-tree-target svg{stroke:#839aaa;width:15px;height:15px}
+#terminal-dialog .file-tree-name{max-width:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#terminal-dialog .file-root-size{font:10px ui-monospace,monospace;color:#657b89;flex:none;padding-left:8px}
+#terminal-dialog .file-tree-status{color:#85949e;background:#fff;border:0;font-size:10px;padding:4px 0;margin:0}
+#terminal-dialog .file-resizer{width:5px;flex:0 0 5px;background:#e2e8ed;cursor:col-resize;touch-action:none}
+#terminal-dialog #terminal-bottom-resizer{height:5px;flex:0 0 5px;background:#e2e8ed;cursor:row-resize;touch-action:none}
+#terminal-dialog .file-resizer:hover,#terminal-dialog #terminal-bottom-resizer:hover,#terminal-dialog [role=separator]:focus-visible{background:#89afc6}
+#terminal-dialog #terminal-bottom{height:var(--bottom-height);flex:0 0 var(--bottom-height);max-height:calc(100% - 220px);min-height:150px;display:flex;flex-direction:column;overflow:hidden;background:#fff}
+#terminal-dialog .terminal-bottom-tabs{display:flex;gap:1px;flex:none;height:29px;background:#fff;border-bottom:1px solid #e1e7eb}
+#terminal-dialog .terminal-bottom-tabs button{padding:4px 16px;color:#87949d;border:0;border-radius:0}
+#terminal-dialog .terminal-bottom-tabs [aria-selected=true]{color:#346986;box-shadow:inset 0 -2px #74a1bc}
+#terminal-dialog #terminal-route,#terminal-dialog #terminal-file-pane{display:flex;flex-direction:column;min-height:0;flex:1;overflow:hidden}
+#terminal-dialog .terminal-route-heading{display:flex;align-items:center;gap:12px;padding:4px 12px;font-size:11px;flex:none}
+#terminal-dialog .terminal-route-heading strong{font-weight:500}
+#terminal-dialog #terminal-route-summary{color:#4f8660;font-size:10px}
+#terminal-dialog #terminal-route-summary.unreachable{color:#af5854}
+#terminal-dialog .terminal-route-heading button{margin-left:auto;padding:3px 8px;border:1px solid #e1e7eb}
+#terminal-dialog .terminal-table-scroll{overflow:auto;flex:1;min-height:0}
+#terminal-dialog table{border-collapse:collapse;width:100%;font-size:11px;text-align:left;white-space:nowrap}
+#terminal-dialog th{position:sticky;top:0;background:#f5f7f9;color:#657b89;font-weight:400;z-index:1}
+#terminal-dialog td,#terminal-dialog th{padding:4px 12px;border-bottom:1px solid #edf1f4}
+#terminal-dialog td{color:#526974;font-variant-numeric:tabular-nums}
+#terminal-dialog tbody tr:hover{background:#f5f9fc}
+#terminal-dialog #terminal-route-status{flex:none;margin:0;padding:3px 12px;color:#657b89;font-size:10px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#terminal-dialog .file-pathbar{display:flex;align-items:center;flex-wrap:wrap;gap:4px;padding:4px 7px;flex:none}
+#terminal-dialog .file-navigation{padding:0;gap:4px}
+#terminal-dialog .file-navigation button{color:#516976;border:1px solid #dce4e9;padding:3px 8px;background:#fff;font-size:11px}
+#terminal-dialog #file-location-form{margin:0;flex:1;min-width:150px;border:1px solid #dce4e9;background:#fff;border-radius:3px}
+#terminal-dialog #file-path{color:#526b7b;font:11px/1.4 ui-monospace,monospace;padding:4px 7px}
+#terminal-dialog #file-location-form button{color:#607b8a}
+#terminal-dialog .file-tools{padding:0;flex-wrap:nowrap}
+#terminal-dialog .file-mode{font:10px ui-monospace,monospace}
+#terminal-dialog .file-table-actions button{font-size:10px;margin-right:7px;padding:2px 5px;color:#6d8797}
+#terminal-dialog .file-table-actions{width:1%}
+#terminal-dialog .terminal-file-table .file-tree-target{max-width:430px;white-space:nowrap}
+#terminal-dialog #terminal-file-pane>.file-tree-status{padding:2px 10px}
+#terminal-dialog .terminal-tabs{background:#fff;border-color:#dfe5ea;flex:none}
+#terminal-dialog .terminal-tabs button{color:#617482}
+#terminal-dialog .terminal-tabs button.active{background:#f3f7fa;color:#345c76;box-shadow:inset 0 -2px #8daec3}
+#terminal-dialog .file-transfer-queue{background:#fff;color:#506b7b;max-height:100px;overflow:auto}
+#terminal-dialog .terminal-keybar{display:none;background:#fff;border-color:#dfe5ea}
+#terminal-dialog .terminal-keybar button{color:#476b81;background:#fff;border-color:#d6e1e8}
+#terminal-dialog .terminal-keybar button[aria-pressed=true]{background:#cde6f5;color:#254f6a}
+#terminal-dialog .terminal-search{background:#fff}
+#terminal-dialog .terminal-search input{background:#fff;color:#344955;border-color:#cfdae2}
+#terminal-dialog .terminal-search button{background:#fff;color:#46667a;border-color:#cfdae2}
+#terminal-dialog .file-empty,#terminal-dialog .file-load-more{color:#8c9ca6}
+#terminal-dialog .is-error{color:#a33e3b!important}
+@media(max-width:700px){
+ #terminal-dialog{width:calc(100vw - 12px);height:calc(100dvh - 16px);max-height:calc(100dvh - 16px)}
+ #terminal-dialog .ssh-session-bar{padding-right:105px;min-height:37px}
+ #terminal-dialog .ssh-session-tabs{flex-basis:auto}
+ #terminal-dialog .ssh-session-tab button:first-child{max-width:125px;padding:5px}
+ #terminal-dialog .ssh-add-session{flex-basis:27px}
+ #terminal-dialog .terminal-header{top:5px;right:4px}
+ #terminal-dialog .terminal-actions button{padding:4px 7px;font-size:11px}
+ #terminal-dialog .terminal-toolbar{padding:5px;gap:4px;min-height:35px}
+ #terminal-dialog .terminal-toolbar>button{padding:4px 8px;font-size:11px}
+ #terminal-dialog .terminal-quickbar{display:none}
+ #terminal-dialog .file-sidebar{position:relative;inset:auto;width:var(--file-width,180px);flex-basis:var(--file-width,180px);min-width:150px;z-index:auto;box-shadow:none;padding:9px 8px 0}
+ #terminal-dialog .file-resizer{display:block;width:5px;min-width:5px;touch-action:none}
+ #terminal-dialog .terminal-keybar{display:flex;min-height:48px;padding:4px;gap:3px}
+ #terminal-dialog .terminal-keybar button{min-height:38px;min-width:36px;padding:3px 7px}
+ #terminal-dialog #terminal-bottom{height:var(--bottom-height,170px);flex-basis:var(--bottom-height,170px)}
+ #terminal-dialog .terminal-route-heading{gap:6px;padding:3px 8px;font-size:10px}
+ #terminal-dialog #terminal-route-summary{font-size:9px}
+ #terminal-dialog .file-pathbar{gap:4px;padding:4px}
+ #terminal-dialog #file-location-form{order:-1;flex-basis:100%;min-width:0}
+ #terminal-dialog .file-tools{margin-left:0;max-width:100%;overflow-x:auto}
+ #terminal-dialog .file-navigation{flex-wrap:wrap}
+ #terminal-dialog .file-tools{flex-wrap:nowrap}
+ #terminal-dialog .file-tools button{flex:none}
+ #terminal-dialog .terminal-resource>div:first-child{flex-wrap:wrap;gap:0 5px}
+ #terminal-dialog .terminal-resource>div:first-child>span:last-child{margin-left:auto}
+ #terminal-dialog .terminal-chart-heading>span{font-size:9px}
+ #terminal-dialog .terminal-network-totals{overflow-wrap:anywhere}
+ #terminal-dialog .terminal-route-heading{flex-wrap:wrap}
+ #terminal-dialog .terminal-route-heading strong{font-size:10px}
+ #terminal-dialog .terminal-route-heading button{padding:2px 4px}
+ #terminal-dialog #terminal-route-summary{order:3;width:100%}
+ #terminal-dialog .file-navigation button{font-size:10px;padding:3px 6px}
+ #terminal-dialog #terminal-mount{padding:6px 3px}
+ #terminal-dialog .terminal-file-table .file-tree-target{max-width:220px}
+ #terminal-dialog.is-compact-terminal #terminal-bottom,#terminal-dialog.is-compact-terminal #terminal-bottom-resizer{display:none}
+ #terminal-dialog.is-compact-terminal .terminal-header{display:block}
+ #terminal-dialog.is-compact-terminal .ssh-add-session{display:block}
+ #terminal-dialog .terminal-footer{font-size:9px;min-height:20px}
+}
+
+/* Compact desktop chrome; terminal glyph rendering remains unchanged. */
+#terminal-dialog .terminal-toolbar>button{min-height:27px}
+#terminal-dialog .terminal-chart-axis{font-size:10px}
+#terminal-dialog .terminal-node-ip{font-weight:550;letter-spacing:0}
+#terminal-dialog #terminal-route table{min-width:620px}
+#terminal-dialog #terminal-route td{padding-top:5px;padding-bottom:5px}
+#terminal-dialog #terminal-route th{font-weight:500}
+#terminal-dialog .route-ttl{width:44px;color:#7d8d97}
+#terminal-dialog .route-address,#terminal-dialog .route-latency{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px}
+#terminal-dialog .route-operator{min-width:160px;max-width:320px}
+#terminal-dialog .route-operator span{display:block;max-width:280px;overflow:hidden;text-overflow:ellipsis;font-size:11px;color:#465c6a}
+#terminal-dialog .route-operator small{display:block;color:#6f8390;font:10px ui-monospace,monospace}
+#terminal-dialog::backdrop{backdrop-filter:none;-webkit-backdrop-filter:none}
+
+#terminal-dialog .terminal-volume{padding:4px 0 8px}
+#terminal-dialog .terminal-volume .file-tree-target{width:100%;gap:8px;font-family:inherit}
+#terminal-dialog .terminal-volume .file-tree-name{font-size:11px;min-width:0;flex:1}
+#terminal-dialog .file-volume-size{flex:none;font-size:10px;color:#4f646d;font-variant-numeric:tabular-nums}
+#terminal-dialog .terminal-volume-track{height:5px;border-radius:4px;overflow:hidden;background:rgba(48,84,98,.09);margin-top:3px}
+#terminal-dialog .terminal-volume-track i{display:block;height:100%;border-radius:4px;background:#66a699;transition:width .35s ease}
+#terminal-dialog #file-root-status:empty{display:none}
+@media(prefers-reduced-motion:reduce){#terminal-dialog .terminal-resource-track i,#terminal-dialog .terminal-volume-track i{transition:none}}
+
+#terminal-dialog .terminal-processes{margin-top:12px;max-height:148px;overflow:auto;scrollbar-width:thin;border:1px solid #dce4e9}
+#terminal-dialog .terminal-processes table{width:100%;table-layout:fixed;font-size:11px}
+#terminal-dialog .terminal-processes th{padding:0;background:#609ace;color:#fff;font-size:11px;font-weight:400}
+#terminal-dialog .terminal-processes th:nth-child(1){width:30%}
+#terminal-dialog .terminal-processes th:nth-child(2){width:26%}
+#terminal-dialog .terminal-processes th:nth-child(3){padding:3px 4px}
+#terminal-dialog .terminal-processes th button{display:block;width:100%;padding:3px 4px;border:0;border-radius:0;background:transparent;color:#fff;font:inherit;text-align:left}
+#terminal-dialog .terminal-processes th button.active{background:#cb775b}
+#terminal-dialog .terminal-processes td{padding:3px 4px;color:#344955;border-bottom:1px solid #edf1f4;overflow:hidden;text-overflow:ellipsis;font-size:11px;font-variant-numeric:tabular-nums}
+#terminal-dialog .terminal-processes td:first-child{background:#edf5fa}
+#terminal-dialog .terminal-processes td:nth-child(2){background:#faf3e8}
+#terminal-dialog .terminal-processes .terminal-process-note{white-space:normal;color:#76848c;background:#fff}
+/* A native modal makes the dashboard inert. Suspend its expensive backdrop
+   filters while the terminal is open; closing restores the selected theme. */
+body:has(#terminal-dialog[open]) :is(.server-card,.glass){backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+
+
+/* Keep the original dark editor readable inside the light terminal chrome. */
+#terminal-dialog .file-editor{color:#d7e3eb;background:#111c25;color-scheme:dark;--text:#d7e3eb;--muted:#9fb5c1;--quiet:#9bb0bd;--line:#263b46;--accent:#94bdb4;--focus:#c8e6dc}
+#terminal-dialog .file-editor-toolbar{color:#9fb5c1;background:#111c25;border-color:#263b46}
+#terminal-dialog .file-editor-meta{color:#9bb0bd;background:#111c25;border-color:#263b46}
+#terminal-dialog .file-editor-bottom{background:#192a33;border-color:#2d404b}
+#terminal-dialog .file-editor button{color:#b3c9d4;border-color:#344c58;background:transparent}
+#terminal-dialog .file-editor button:hover:not(:disabled){background:#253e48}
+#terminal-dialog .file-editor #file-save{color:#dceee8;background:#375b59;border-color:#547b74}
+#terminal-dialog .file-editor button:focus-visible,#terminal-dialog .file-editor input:focus-visible{outline-color:#94bdb4}
+#terminal-dialog .file-editor .is-error{color:#edb09f!important}
+#terminal-dialog .file-editor .cm-search input::placeholder{color:#9bb0bd;opacity:1}

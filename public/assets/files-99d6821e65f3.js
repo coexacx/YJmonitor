@@ -1,6 +1,6 @@
-import {compactBytes,workspaceWidth,workspaceHeight} from './terminal-monitor.mjs';
-import {createTransfers} from './transfers.mjs';
-import {createEditor,reviewChanges} from './editor.mjs';
+import {compactBytes,workspaceWidth,workspaceHeight} from "/assets/terminal-monitor-be68a4697cbd.js";
+import {createTransfers} from "/assets/transfers-e30ce1961db2.js";
+import {createEditor,reviewChanges} from "/assets/editor-a0cdd82b7f1a.js";
 export function createFileBrowser({dialog,scope,send,onResize,onTerminal}){
  const $=s=>scope.querySelector(s),sidebar=$('#file-sidebar'),tree=$('#file-tree'),pathInput=$('#file-path'),editor=$('#file-editor'),input=$('#file-content'),status=$('#file-editor-status');
  const pending=new Map(),cache=new Map();let active=false,sequence=0,generation=0,root='/',current=null,baseline='',saving=false,opening=false,confirmResolve=null;
