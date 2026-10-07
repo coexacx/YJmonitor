@@ -24,6 +24,7 @@ RestrictSUIDSGID=true
 RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
 CapabilityBoundingSet=
 LockPersonality=true
+LimitNOFILE=8192
 MemoryMax=512M
 TasksMax=128
 [Install]

@@ -3,8 +3,8 @@ set +x
 set -Eeuo pipefail
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 umask 077
-readonly YUJI_VERSION=0.11.3
-readonly YUJI_RELEASE_BASE=https://github.com/coexacx/YJmonitor/releases/download/v0.11.3
+readonly YUJI_VERSION=0.11.4
+readonly YUJI_RELEASE_BASE=https://github.com/coexacx/YJmonitor/releases/download/v0.11.4
 readonly YUJI_PUBLIC_KEY=o8+DdHbo82V7fxJEIiEhe5AK/frR91Fz5vjf/pDAnts=
 yuji_work='' yuji_name='' yuji_port=19281 yuji_cache='' yuji_check=0
 die(){ printf '\n  %s\n\n' "$*" >&2; exit 1; }

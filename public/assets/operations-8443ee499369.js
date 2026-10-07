@@ -1,5 +1,5 @@
-import {createAgentMaintenance} from './agent-maintenance.mjs';
-import {renderOffsite} from './offsite.mjs';
+import {createAgentMaintenance} from "/assets/agent-maintenance-0951f56789ed.js";
+import {renderOffsite} from "/assets/offsite-a40ce560bd22.js";
 
 export function createOperations({el,api,toast,field,button,heading,getRecords,getAuth,refresh}){
  const apiRoot='/api/admin/ops/';

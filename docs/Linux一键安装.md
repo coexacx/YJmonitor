@@ -1,6 +1,6 @@
 # Linux 一键部署与维护
 
-本页适用于羽迹探针 Rust 独立版 0.11.3。安装器下载预编译发行包，不在用户服务器上编译 Rust，不需要数据库或 PHP。
+本页适用于羽迹探针 Rust 独立版 0.11.4。安装器下载预编译发行包，不在用户服务器上编译 Rust，不需要数据库或 PHP。
 
 ## 安装
 
@@ -8,7 +8,7 @@
 
 ~~~sh
 curl -fL --proto '=https' --proto-redir '=https' --tlsv1.2 \
-  https://raw.githubusercontent.com/coexacx/YJmonitor/v0.11.3/install.sh \
+  https://raw.githubusercontent.com/coexacx/YJmonitor/v0.11.4/install.sh \
   -o /root/yuji-install.sh
 bash /root/yuji-install.sh
 ~~~
@@ -28,7 +28,7 @@ HTTP 不加密。添加节点与使用终端前，可以选择菜单 13，填写
 ## 管理菜单
 
 ~~~sh
-sudo yuji-probe
+sudo YJ
 ~~~
 
 顶部显示版本、运行状态和地址。菜单提供：

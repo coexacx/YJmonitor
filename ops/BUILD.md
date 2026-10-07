@@ -43,4 +43,6 @@ node build.mjs
 
     node --test source/tests/seasons.test.mjs
 
-本仓库使用 ops/package-release.py 生成唯一的 Rust 发行包，默认 --variant rust。签名私钥必须放在源码树之外。正式标签为 v0.11.3，在 coexacx/YJmonitor 中发布为 latest；不操作原 PHP 仓库的 latest。
+本仓库使用 ops/package-release.py 生成唯一的 Rust 发行包，默认 --variant rust。签名私钥必须放在源码树之外。正式标签为 v0.11.4，在 coexacx/YJmonitor 中发布为 latest；不操作原 PHP 仓库的 latest。
+
+0.11.4 没有修改 Agent（仍为 0.2.3），主控继续使用 v0.11.3 的固定已签名 Agent 下载源。0.11.4 Release 同时附带相同 Agent 二进制；不要删除该固定源，变更 Agent 时一起更新下载地址与验签版本。

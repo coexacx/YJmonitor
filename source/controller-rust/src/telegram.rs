@@ -365,7 +365,7 @@ fn tick(app: &App, i: &mut Inner) {
             }
             let day = renewal_day(&n.expires_at);
             let index = next.queue.iter().position(|e| {
-                e.kind == "renewal" && e.renewal_day == day && e.renewal_nodes.len() < 200
+                e.kind == "renewal" && e.renewal_day == day && e.renewal_nodes.len() < MAX_NODES
             });
             let index = if let Some(k) = index {
                 k

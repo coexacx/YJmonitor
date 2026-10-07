@@ -28,6 +28,7 @@ use tokio_util::sync::CancellationToken;
 use zeroize::Zeroizing;
 
 pub const COOKIE: &str = "__Host-vistart_probe";
+pub const MAX_NODES: usize = 1000;
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 pub type ApiResult<T> = Result<T, ApiError>;
 #[derive(Debug)]
@@ -365,6 +366,7 @@ pub struct Inner {
     pub theme_cache: Option<(String, std::sync::Arc<[u8]>)>,
     pub auth: Auth,
     pub data: Data,
+    pub admin_cache: Option<(i64, Arc<[u8]>)>,
     pub cache: Option<(i64, std::sync::Arc<[u8]>)>,
     pub ops: crate::operations::State,
     pub sessions: HashMap<String, Session>,
@@ -406,7 +408,7 @@ impl App {
         if theme_migrated {
             atomic_json(&dir.join("nodes.json"), &data).map_err(|_| "theme migration failed")?;
         }
-        if data.nodes.len() > 200 || data.commands.len() > 50 {
+        if data.nodes.len() > MAX_NODES || data.commands.len() > 50 {
             return Err("state limits exceeded");
         }
         if data.schema < 2 {
@@ -471,10 +473,13 @@ impl App {
             .user_agent(format!("Vistart-Probe/{VERSION}"))
             .build()
             .map_err(|_| "HTTPS client unavailable")?;
+        let mut ops = crate::operations::load(&dir)?;
+        crate::operations::prune_removed_nodes(&mut ops, &data.nodes);
         let inner = Inner {
             theme_cache: None,
             cache: None,
-            ops: crate::operations::load(&dir)?,
+            admin_cache: None,
+            ops,
             auth,
             data,
             sessions: HashMap::new(),
@@ -575,6 +580,7 @@ impl App {
             && constant(c.header("X-Probe-Gateway"), &hex::encode(h.finalize()))
     }
     pub fn record(&self, i: &mut Inner, action: &str, subject: &str) {
+        i.admin_cache = None;
         i.audit.push(Audit {
             source: String::new(),
             result: if action.ends_with("failed") {
@@ -598,6 +604,7 @@ impl App {
         atomic_json(&self.0.dir.join("nodes.json"), &data).map_err(|_| ApiError::internal())?;
         i.data = data;
         i.cache = None;
+        i.admin_cache = None;
         Ok(())
     }
     pub fn persist_limits(&self, i: &mut Inner) -> ApiResult<()> {

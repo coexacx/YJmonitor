@@ -218,6 +218,14 @@ pub fn begin(app: &App, i: &mut Inner, c: &Context, body: &[u8]) -> ApiResult<Ap
         .find(|n| n.public.id == v.id && !n.demo)
         .cloned()
         .ok_or_else(|| ApiError::new(404, "请添加真实服务器"))?;
+    if node.removing
+        || i.ops
+            .transfers
+            .get(&v.id)
+            .is_some_and(|t| matches!(t.state.as_str(), "pending" | "running"))
+    {
+        return Err(ApiError::new(409, "该服务器已有管理任务，请等待完成"));
+    }
     if !acceptable_ip(&node.ip)
         || !username(&node.username)
         || v.password.is_empty()

@@ -401,6 +401,39 @@ fn apply(i: &mut Inner, id: &str, m: Metrics) -> bool {
     n.detected_ip = m.public_ip;
     true
 }
+
+pub(crate) fn authorize_agent(i: &mut Inner, c: &Context) -> ApiResult<(String, String)> {
+    let denied = |i: &mut Inner, status, message| -> ApiResult<(String, String)> {
+        i.request(&format!("agent:{}", c.ip), 120)?;
+        Err(ApiError::new(status, message))
+    };
+    if c.method != "GET" || !c.header("Origin").is_empty() {
+        return denied(i, 403, "agent origin rejected");
+    }
+    let id = c.header("X-Probe-Node");
+    let value = c
+        .header("Authorization")
+        .strip_prefix("Bearer ")
+        .unwrap_or("");
+    if id.len() > 64 || value.len() != 64 {
+        return denied(i, 401, "agent authentication required");
+    }
+    let digest = hex::encode(Sha256::digest(value.as_bytes()));
+    if !i
+        .data
+        .secrets
+        .get(id)
+        .is_some_and(|s| constant(&s.token_hash, &digest))
+    {
+        return denied(i, 401, "agent authentication failed");
+    }
+    // Valid nodes behind the same NAT do not consume each other's failure budget.
+    i.request(&format!("agent-node:{id}"), 30)?;
+    if i.agents.contains_key(id) || i.agent_reserved.contains(id) {
+        return Err(ApiError::new(409, "agent already connected"));
+    }
+    Ok((id.to_string(), digest))
+}
 pub async fn agent_handler(
     State(app): State<App>,
     ConnectInfo(remote): ConnectInfo<SocketAddr>,
@@ -418,34 +451,7 @@ pub async fn agent_handler(
         remote,
         &app.0.origin,
     );
-    let validation = (|| -> ApiResult<(String, String)> {
-        let mut i = app.lock();
-        i.request(&format!("agent:{}", c.ip), 120)?;
-        if c.method != "GET" || !c.header("Origin").is_empty() {
-            return Err(ApiError::new(403, "agent origin rejected"));
-        }
-        let id = c.header("X-Probe-Node");
-        let value = c
-            .header("Authorization")
-            .strip_prefix("Bearer ")
-            .unwrap_or("");
-        if id.len() > 64 || value.len() != 64 {
-            return Err(ApiError::new(401, "agent authentication required"));
-        }
-        let digest = hex::encode(Sha256::digest(value.as_bytes()));
-        if !i
-            .data
-            .secrets
-            .get(id)
-            .is_some_and(|s| constant(&s.token_hash, &digest))
-        {
-            return Err(ApiError::new(401, "agent authentication failed"));
-        }
-        if i.agents.contains_key(id) || i.agent_reserved.contains(id) {
-            return Err(ApiError::new(409, "agent already connected"));
-        }
-        Ok((id.to_string(), digest))
-    })();
+    let validation = authorize_agent(&mut app.lock(), &c);
     let (id, digest) = match validation {
         Ok(v) => v,
         Err(e) => return e.into_response(),
@@ -506,7 +512,7 @@ async fn agent_loop(app: App, id: String, digest: String, ws: WebSocket) {
     });
     let result=async{let(mut sequence,mut frames,mut traffic)=(0u64,0usize,0usize);let mut window=Instant::now();let mut last=Instant::now();let mut rate_time=last;let mut credits=4.0f64;let mut ping:Option<(String,Instant)>=None;
  loop{let next=tokio::select!{_=link.stop.cancelled()=>return Ok::<(),&'static str>(()),_=tokio::time::sleep_until((last+Duration::from_secs(15)).into())=>return Err("metrics timeout"),v=reader.next()=>v};let raw=match next{Some(Ok(WS::Text(s)))=>s,Some(Ok(WS::Ping(b)))=>{link.output.try_control(WS::Pong(b)).map_err(|_|"control writer unavailable")?;continue},Some(Ok(WS::Pong(_)))=>continue,_=>return Err("agent connection closed")};let m=Message::parse(raw.as_bytes())?;let t=Instant::now();if t.duration_since(window)>=Duration::from_secs(1){window=t;frames=0;traffic=0}frames+=1;let bytes=m.bytes()?;traffic=traffic.saturating_add(bytes.len());if frames>2000||traffic>8*1024*1024{return Err("agent traffic limit")}
- match m.kind.as_str(){"metrics"=>{let metrics=m.metrics.ok_or("metrics missing")?;credits=(credits+t.duration_since(rate_time).as_secs_f64()*4.0).min(4.0);rate_time=t;if m.sequence<=sequence||credits<1.0||!valid_metrics(&metrics){return Err("invalid metrics")};credits-=1.0;sequence=m.sequence;let latency=metrics.latency_probe;{let mut i=app.lock();if !apply(&mut i,&id,metrics.clone()){return Err("node removed")}
+ match m.kind.as_str(){"metrics"=>{let metrics=m.metrics.ok_or("metrics missing")?;credits=(credits+t.duration_since(rate_time).as_secs_f64()*4.0).min(4.0);rate_time=t;if m.sequence<=sequence||credits<1.0||!valid_metrics(&metrics){return Err("invalid metrics")};credits-=1.0;sequence=m.sequence;let latency=metrics.latency_probe;{let mut i=app.lock();if !apply(&mut i,&id,metrics){return Err("node removed")}
 }last=t;let mut ack=Message::new("ack","");ack.sequence=sequence;send(&link.output,ack).await?;if latency&&ping.as_ref().is_none_or(|(_,at)|at.elapsed()>Duration::from_secs(10)){let nonce=token()[..32].to_string();send(&link.output,Message::new("ping",&nonce)).await?;ping=Some((nonce,Instant::now()));}},"pong"=>{if let Some(ms)=latency_reply(&mut ping,&m.session,Instant::now()){let mut i=app.lock();if let Some(n)=i.data.nodes.iter_mut().find(|n|n.public.id==id){n.public.latency_ms=Some(ms);n.latency_at=now();}}},"ssh_ready"=>{let mut all=link.tunnels.lock().unwrap();if let Some(slot)=all.get_mut(&m.session)&& let Some(ready)=slot.ready.take(){let _=ready.send(m.error.is_empty());}},"ssh_ack"=>{if let Some(slot)=link.tunnels.lock().unwrap().get(&m.session)&& slot.credits.available_permits()<WINDOW{slot.credits.add_permits(1);}},"ssh_data"=>{if let Some(slot)=link.tunnels.lock().unwrap().get(&m.session)&& slot.input.try_send(bytes).is_err(){slot.stop.cancel();}},"ssh_close"=>{if let Some(slot)=link.tunnels.lock().unwrap().get(&m.session){slot.stop.cancel();}},_=>return Err("unsupported agent message")}
  }}.await;
     let disconnect_reason = result.err();

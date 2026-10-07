@@ -155,9 +155,9 @@ fn unpack(value: Value, passphrase: &str) -> ApiResult<Bundle> {
     }
     let b: Bundle = serde_json::from_slice(&raw).map_err(|_| error("备份内容不正确"))?;
     if b.schema != 1
-        || b.data.nodes.len() > 200
+        || b.data.nodes.len() > MAX_NODES
         || b.data.commands.len() > 50
-        || b.pins.len() > 400
+        || b.pins.len() > MAX_NODES * 2
         || !valid_text(&b.data.site.name, 60)
         || !username(&b.auth.username)
         || b.auth.hash.len() > 128
@@ -177,15 +177,15 @@ fn unpack(value: Value, passphrase: &str) -> ApiResult<Bundle> {
     let ids: std::collections::HashSet<_> =
         b.data.nodes.iter().map(|n| n.public.id.as_str()).collect();
     if ids.len() != b.data.nodes.len()
-        || b.data.secrets.len() > 200
+        || b.data.secrets.len() > MAX_NODES
         || !b.data.secrets.keys().all(|id| ids.contains(id.as_str()))
         || b.auth.recovery.len() > 10
         || b.auth
             .recovery
             .iter()
             .any(|r| r.len() != 64 || !r.bytes().all(|c| c.is_ascii_hexdigit()))
-        || b.operations.transfers.len() > 200
-        || b.operations.retired.len() > 200
+        || b.operations.transfers.len() > MAX_NODES
+        || b.operations.retired.len() > MAX_NODES
         || !crate::offsite::validate_restore(&b.operations.offsite)
     {
         return Err(error("备份身份或状态不完整"));
@@ -196,6 +196,8 @@ fn unpack(value: Value, passphrase: &str) -> ApiResult<Bundle> {
     Ok(b)
 }
 fn snapshot(app: &App, i: &Inner) -> Bundle {
+    let mut operations = i.ops.clone();
+    operations::prune_removed_nodes(&mut operations, &i.data.nodes);
     Bundle {
         schema: 1,
         origin: app.0.origin.clone(),
@@ -204,7 +206,7 @@ fn snapshot(app: &App, i: &Inner) -> Bundle {
         auth: i.auth.clone(),
         data: i.data.clone(),
         telegram: i.telegram.clone(),
-        operations: i.ops.clone(),
+        operations,
         _legacy_tracks: (),
         pins: i.pins.clone(),
     }
@@ -687,7 +689,7 @@ mod tests {
     }
     #[test]
     fn package_tamper_and_wrong_password() {
-        let b = Bundle {
+        let mut b = Bundle {
             schema: 1,
             origin: "https://old.example".into(),
             created: 1,
@@ -709,6 +711,29 @@ mod tests {
             _legacy_tracks: (),
             pins: HashMap::new(),
         };
+        for num in 0..MAX_NODES {
+            let id = format!("backup-{num}");
+            b.data.nodes.push(Node {
+                public: PublicNode {
+                    id: id.clone(),
+                    name: format!("Node {num}"),
+                    ..Default::default()
+                },
+                ip: format!("10.1.{}.{}", num / 250, num % 250 + 1),
+                port: 22,
+                username: "root".into(),
+                ..Default::default()
+            });
+            b.data.secrets.insert(id.clone(), NodeSecret::default());
+            b.operations.transfers.insert(
+                id.clone(),
+                Transfer {
+                    state: "done".into(),
+                    ..Default::default()
+                },
+            );
+            b.operations.retired.insert(id, NodeSecret::default());
+        }
         let packed = pack(b, "test-backup-passphrase").unwrap();
         assert!(unpack(packed.clone(), "wrong-backup-passphrase").is_err());
         assert_eq!(
@@ -716,6 +741,14 @@ mod tests {
                 .unwrap()
                 .origin,
             "https://old.example"
+        );
+        assert_eq!(
+            unpack(packed.clone(), "test-backup-passphrase")
+                .unwrap()
+                .data
+                .nodes
+                .len(),
+            MAX_NODES
         );
         let mut bad = packed;
         bad["format"] = json!("other");

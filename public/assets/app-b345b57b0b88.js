@@ -1,8 +1,8 @@
-import {createPager} from './pagination.mjs';
-import {refreshAppearance} from './appearance.mjs';
-import {initAdmin} from './admin.mjs';
-import {countryByCode,normalizedCountry} from './countries.mjs';
-import {createNetworkUI} from './network.mjs';
+import {createPager} from "/assets/pagination-d84897e63d5d.js";
+import {refreshAppearance} from "/assets/appearance-40485caa5df3.js";
+import {initAdmin} from "/assets/admin-49c91ceb36bb.js";
+import {countryByCode,normalizedCountry} from "/assets/countries-3dabb5bbec57.js";
+import {createNetworkUI} from "/assets/network-07924d16c6d9.js";
 
 const $=selector=>document.querySelector(selector);
 const NS='http://www.w3.org/2000/svg';

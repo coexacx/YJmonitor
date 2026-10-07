@@ -30,11 +30,26 @@ pub fn load(dir: &Path) -> Result<State, &'static str> {
     };
     for t in state.transfers.values_mut() {
         if t.state == "running" {
-            t.state = "retry".into();
+            t.state = if t.batch_id.is_empty() {
+                "retry"
+            } else {
+                "pending"
+            }
+            .into();
+            t.message = "主控重启后继续任务".into();
             t.next = 0;
         }
     }
     Ok(state)
+}
+// Management records have no executable target after the inventory entry is removed.
+pub fn prune_removed_nodes(state: &mut State, nodes: &[Node]) {
+    let ids: std::collections::HashSet<_> = nodes.iter().map(|n| n.public.id.as_str()).collect();
+    state.transfers.retain(|id, _| ids.contains(id.as_str()));
+    state.retired.retain(|id, _| ids.contains(id.as_str()));
+    state
+        .removal_names
+        .retain(|id, _| ids.contains(id.as_str()));
 }
 pub fn save(app: &App, i: &Inner) -> ApiResult<()> {
     atomic_json(&app.0.dir.join("operations.json"), &i.ops).map_err(|_| ApiError::internal())
@@ -55,6 +70,9 @@ struct Input {
     version: String,
 }
 pub async fn api(app: App, c: Context, body: Vec<u8>) -> ApiResult<ApiReply> {
+    if c.path == "/api/admin/ops/agents/batch-update" {
+        return crate::server_management::batch_update(app, c, body);
+    }
     if c.path == "/api/migrate" {
         return crate::migration::receive(app, c, body).await;
     }
@@ -153,9 +171,15 @@ pub async fn api(app: App, c: Context, body: Vec<u8>) -> ApiResult<ApiReply> {
         )),
         ("migration/retry", "POST") => {
             auth::require_elevated(&i, &c)?;
-            if let Some(t) = i.ops.transfers.get_mut(&v.id) {
-                t.next = 0;
+            let t = i
+                .ops
+                .transfers
+                .get_mut(&v.id)
+                .ok_or_else(|| ApiError::new(404, "任务不存在"))?;
+            if t.state != "retry" {
+                return Err(ApiError::new(409, "该任务当前无需重试"));
             }
+            t.next = 0;
             save(&app, &i)?;
             Ok(ApiReply::ok(json!({"ok":true})))
         }

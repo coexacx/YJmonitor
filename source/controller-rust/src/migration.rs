@@ -6,6 +6,9 @@ use std::time::Duration;
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Transfer {
+    pub task_id: String,
+    pub batch_id: String,
+    pub updated_at: i64,
     pub action: String,
     pub target: String,
     pub state: String,
@@ -20,10 +23,16 @@ pub fn start_manage(app: &App, i: &mut Inner, id: &str, action: &str) -> ApiResu
         .iter()
         .find(|n| n.public.id == id)
         .ok_or_else(|| ApiError::new(404, "节点不存在"))?;
+    if i.jobs
+        .values()
+        .any(|j| j.node_id == id && j.state == "running")
+    {
+        return Err(ApiError::new(409, "该服务器正在部署"));
+    }
     if i.ops
         .transfers
         .get(id)
-        .is_some_and(|t| t.state == "running" || t.state == "pending")
+        .is_some_and(crate::server_management::busy)
     {
         return Err(ApiError::new(409, "该节点已有管理任务"));
     }
@@ -33,9 +42,12 @@ pub fn start_manage(app: &App, i: &mut Inner, id: &str, action: &str) -> ApiResu
         .get(id)
         .cloned()
         .ok_or_else(|| ApiError::new(409, "节点尚未部署"))?;
+    let previous = i.ops.transfers.get(id).cloned();
     i.ops.transfers.insert(
         id.into(),
         Transfer {
+            task_id: token(),
+            updated_at: now(),
             action: action.into(),
             target: app.0.origin.clone(),
             state: "pending".into(),
@@ -45,7 +57,14 @@ pub fn start_manage(app: &App, i: &mut Inner, id: &str, action: &str) -> ApiResu
         },
     );
     let name = n.public.name.clone();
-    operations::save(app, i)?;
+    if let Err(e) = operations::save(app, i) {
+        if let Some(t) = previous {
+            i.ops.transfers.insert(id.into(), t);
+        } else {
+            i.ops.transfers.remove(id);
+        }
+        return Err(e);
+    }
     app.record(i, "node_management_requested", &format!("{name}: {action}"));
     Ok(())
 }
@@ -53,6 +72,12 @@ pub async fn receive(_app: App, _c: Context, _body: Vec<u8>) -> ApiResult<ApiRep
     Err(ApiError::new(404, "恢复通过受限 SSH 通道执行"))
 }
 pub async fn tick(app: &App) {
+    // Shared semaphore also bounds password deployments; fill at most two slots.
+    for _ in 0..2 {
+        start_next(app);
+    }
+}
+fn start_next(app: &App) {
     let work = {
         let mut i = app.lock();
         let at = now();
@@ -60,7 +85,20 @@ pub async fn tick(app: &App) {
             .ops
             .transfers
             .iter()
-            .find(|(_, t)| ["pending", "retry"].contains(&t.state.as_str()) && t.next <= at)
+            .filter(|(id, t)| {
+                ["pending", "retry"].contains(&t.state.as_str())
+                    && t.next <= at
+                    && i.data.nodes.iter().any(|n| &n.public.id == *id)
+                    && !i
+                        .jobs
+                        .values()
+                        .any(|j| &j.node_id == *id && j.state == "running")
+                    && !i
+                        .enrollments
+                        .values()
+                        .any(|e| &e.node == *id && e.claimed && e.expires >= at)
+            })
+            .min_by_key(|(id, t)| (t.next, *id))
             .map(|(id, _)| id.clone());
         let Some(id) = id else { return };
         let Some(node) = i.data.nodes.iter().find(|n| n.public.id == id).cloned() else {
@@ -70,10 +108,15 @@ pub async fn tick(app: &App) {
             return;
         };
         let t = i.ops.transfers.get_mut(&id).unwrap();
+        let previous = t.clone();
         t.state = "running".into();
+        t.updated_at = now();
         t.message = "正在校验 SSH 指纹并连接".into();
         let task = t.clone();
-        let _ = operations::save(app, &i);
+        if operations::save(app, &i).is_err() {
+            i.ops.transfers.insert(id.clone(), previous);
+            return;
+        }
         (id, node, task, slot)
     };
     let app = app.clone();
@@ -83,7 +126,17 @@ pub async fn tick(app: &App) {
             .await
             .unwrap_or(Err("管理操作超时"));
         let mut i = app.lock();
+        // A removed/replaced task must never receive a stale completion.
+        if !i
+            .ops
+            .transfers
+            .get(&id)
+            .is_some_and(|t| t.task_id == task.task_id && t.state == "running")
+        {
+            return;
+        }
         if let Some(t) = i.ops.transfers.get_mut(&id) {
+            t.updated_at = now();
             match &result {
                 Ok(()) => {
                     t.state = "done".into();
@@ -97,7 +150,12 @@ pub async fn tick(app: &App) {
                     t.old = NodeSecret::default();
                 }
                 Err(e) => {
-                    t.state = "retry".into();
+                    t.state = if task.batch_id.is_empty() {
+                        "retry"
+                    } else {
+                        "failed"
+                    }
+                    .into();
                     t.message = (*e).into();
                     t.next = now() + 300;
                 }
@@ -113,6 +171,7 @@ pub async fn tick(app: &App) {
                 }
                 i.ops.removal_names.remove(&id);
                 i.ops.retired.remove(&id);
+                i.ops.transfers.remove(&id);
             }
         }
         app.record(
@@ -128,6 +187,17 @@ pub async fn tick(app: &App) {
     });
 }
 async fn manage(app: &App, node: &Node, task: &Transfer) -> Result<(), &'static str> {
+    if !task.batch_id.is_empty() {
+        let i = app.lock();
+        if !i
+            .data
+            .nodes
+            .iter()
+            .any(|n| n.public.id == node.public.id && n.public.online && !n.removing)
+        {
+            return Err("服务器已离线或移除，请在恢复在线后重试");
+        }
+    }
     if task.old.recovery_key.is_empty() {
         if task.action == "upgrade" {
             return bootstrap(app, node).await;
@@ -136,7 +206,7 @@ async fn manage(app: &App, node: &Node, task: &Transfer) -> Result<(), &'static 
     }
     let client = ssh::recovery_client(app, node, &task.old)
         .await
-        .map_err(|_| "SSH 无法连接或恢复密钥验证失败，稍后自动重试")?;
+        .map_err(|_| "SSH 无法连接或恢复密钥验证失败")?;
     let proof = app.unseal(&format!("{}:token", node.public.id), &task.old.token)?;
     let proof = std::str::from_utf8(&proof).map_err(|_| "恢复凭据不可用")?;
     let mut request = json!({"action":task.action,"proof":proof});

@@ -1,0 +1,146 @@
+{
+  "ok": true,
+  "nodes": 1000,
+  "clients": 50,
+  "intervalMS": 5000,
+  "requestedSeconds": 60,
+  "measurementStart": "2026-10-08T07:10:39.303885245+08:00",
+  "measurementEnd": "2026-10-08T07:11:39.318263158+08:00",
+  "requests": 600,
+  "success": 600,
+  "errors": 0,
+  "successLatencyMS": {
+    "max": 370.139815,
+    "p50": 173.064123,
+    "p95": 269.218831,
+    "p99": 358.048778
+  },
+  "agentFailures": 0,
+  "metricsDuringLoad": 60051,
+  "metricsTotal": 75352,
+  "finalOnline": 1000,
+  "finalLatestMatched": 1000,
+  "finalLagSamples": 0,
+  "observations": [
+    {
+      "maxLagSamples": 1,
+      "online": 1000,
+      "requestMS": 178.963347,
+      "seconds": 5.180678442
+    },
+    {
+      "maxLagSamples": 1,
+      "online": 1000,
+      "requestMS": 61.833626,
+      "seconds": 10.062646184
+    },
+    {
+      "maxLagSamples": 1,
+      "online": 1000,
+      "requestMS": 60.073506,
+      "seconds": 15.061554062
+    },
+    {
+      "maxLagSamples": 1,
+      "online": 1000,
+      "requestMS": 165.982212,
+      "seconds": 20.166546348
+    },
+    {
+      "maxLagSamples": 1,
+      "online": 1000,
+      "requestMS": 101.307851,
+      "seconds": 25.101789893
+    },
+    {
+      "maxLagSamples": 1,
+      "online": 1000,
+      "requestMS": 185.454548,
+      "seconds": 30.185992468
+    },
+    {
+      "maxLagSamples": 1,
+      "online": 1000,
+      "requestMS": 78.672695,
+      "seconds": 35.07968019
+    },
+    {
+      "maxLagSamples": 1,
+      "online": 1000,
+      "requestMS": 47.282682,
+      "seconds": 40.048138302
+    },
+    {
+      "maxLagSamples": 1,
+      "online": 1000,
+      "requestMS": 78.407364,
+      "seconds": 45.078884305
+    },
+    {
+      "maxLagSamples": 1,
+      "online": 1000,
+      "requestMS": 55.548255,
+      "seconds": 50.056811416
+    },
+    {
+      "maxLagSamples": 1,
+      "online": 1000,
+      "requestMS": 45.827473,
+      "seconds": 55.046064376
+    },
+    {
+      "maxLagSamples": 1,
+      "online": 1000,
+      "requestMS": 51.946196,
+      "seconds": 60.052473805
+    }
+  ],
+  "budget": {
+    "sharedApplicationCPUCores": 1,
+    "sharedApplicationMemoryMiB": 768,
+    "controllerMemoryMiB": 512,
+    "osReserveMiB": 256,
+    "agentReportsPerSecond": 1,
+    "viewerRefreshSeconds": 5,
+    "simulatorOutsideApplicationBudget": true
+  },
+  "binaryBytes": 14736800,
+  "binarySHA256": "17adde0975b78a30be0877b946770aaaca2502c9b682adafa4c6a3b74517e795",
+  "averageResponseBytes": 786283.4166666666,
+  "version": "0.11.4",
+  "hostCPU": "Intel Xeon E7-4830 v3 @ 2.10GHz (KVM)",
+  "method": "Controller and separate Nginx share a cgroup slice limited to one CPU and 768 MiB. Load generator is outside this budget. This is not a booted 1 GiB VM.",
+  "resources": {
+    "controller": {
+      "cpuPercentOneCore": 33.42695053745909,
+      "rssMeanMiB": 41.75969709429825,
+      "rssPeakMiB": 41.92578125,
+      "pssPeakMiB": 41.91796875,
+      "peakCgroupMiB": 74.9140625,
+      "maxFDs": 1025,
+      "throttledSeconds": 0.0,
+      "oomKills": 0
+    },
+    "nginx": {
+      "cpuPercentOneCore": 22.04764164691031,
+      "rssMeanMiB": 85.2668242872807,
+      "rssPeakMiB": 87.7578125,
+      "pssPeakMiB": 73.8720703125,
+      "peakCgroupMiB": 92.42578125,
+      "maxFDs": 2116,
+      "throttledSeconds": 0.0,
+      "oomKills": 0
+    },
+    "application": {
+      "cpuPercentOneCore": 55.43882795875065,
+      "peakCgroupMiB": 160.93359375,
+      "throttledSeconds": 1.888341,
+      "oomKills": 0
+    }
+  },
+  "installation": {
+    "uncompressedPackageBytes": 43709127,
+    "compressedPackageBytes": 16840815,
+    "measureNotes": "Before final documentation only; excludes OS, Nginx, private state, logs, backups and updater rollback."
+  }
+}

@@ -105,7 +105,14 @@ async fn api(
             let mut inner = app.lock();
             app.guard(&mut inner, &c, true, c.method != "GET")?;
         }
-        let max_body = if c.path == "/api/admin/ops/restore" {
+        let max_body = if [
+            "/api/admin/ops/agents/batch-update",
+            "/api/admin/node-order",
+        ]
+        .contains(&c.path.as_str())
+        {
+            96 * 1024
+        } else if c.path == "/api/admin/ops/restore" {
             24 * 1024 * 1024
         } else if [
             "/api/admin/theme",
@@ -231,10 +238,14 @@ fn dispatch(app: &App, c: &Context, body: &[u8]) -> ApiResult<ApiReply> {
         }
         ("/api/admin/nodes", "GET") => {
             app.guard(&mut i, c, true, false)?;
-            let list: Vec<_> = i.data.nodes.iter().map(nodes::admin_node).collect();
-            Ok(ApiReply::ok(
-                json!({"nodes":list,"site":i.data.site,"preview":i.data.preview,"themeRevision":i.data.theme.revision}),
-            ))
+            if i.admin_cache.as_ref().is_none_or(|(at, _)| *at != now()) {
+                let list = crate::server_management::list(&i);
+                let raw=serde_json::to_vec(&json!({"nodes":list,"site":i.data.site,"preview":i.data.preview,"themeRevision":i.data.theme.revision})).map_err(|_|ApiError::internal())?;
+                i.admin_cache = Some((now(), Arc::from(raw)));
+            }
+            let mut reply = ApiReply::ok(serde_json::Value::Null);
+            reply.raw = Some(i.admin_cache.as_ref().unwrap().1.clone());
+            Ok(reply)
         }
         ("/api/admin/nodes", "POST") => nodes::save_node(app, &mut i, c, "", body),
         ("/api/admin/site", "PUT") => nodes::site(app, &mut i, c, body),

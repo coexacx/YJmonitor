@@ -226,8 +226,8 @@ pub fn save_node(
     {
         return Err(ApiError::new(400, "地区格式不正确"));
     }
-    if id.is_empty() && i.data.nodes.len() >= 200 {
-        return Err(ApiError::new(409, "当前最多管理 200 台服务器"));
+    if id.is_empty() && i.data.nodes.len() >= MAX_NODES {
+        return Err(ApiError::new(409, "当前最多管理 1000 台服务器"));
     }
     let index = i.data.nodes.iter().position(|n| n.public.id == id);
     if !id.is_empty() && index.is_none() {
@@ -340,6 +340,16 @@ pub fn save_node(
 }
 pub fn delete_node(app: &App, i: &mut Inner, c: &Context, id: &str) -> ApiResult<ApiReply> {
     app.guard(i, c, true, true)?;
+    if i.ops
+        .transfers
+        .get(id)
+        .is_some_and(|t| t.state == "running")
+    {
+        return Err(ApiError::new(
+            409,
+            "该服务器正在执行管理任务，请等待完成后移除",
+        ));
+    }
     if i.jobs
         .values()
         .any(|j| j.node_id == id && j.state == "running")

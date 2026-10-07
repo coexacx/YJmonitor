@@ -17,6 +17,7 @@ mod offsite;
 mod operations;
 mod realtime;
 mod retained;
+mod server_management;
 mod setup;
 mod ssh;
 mod telegram;
@@ -288,6 +289,18 @@ fn run() -> Result<(), &'static str> {
     }
     if o.supervise {
         rustix::process::setsid().map_err(|_| "cannot detach supervisor")?;
+    }
+    // Raise only this process's soft descriptor limit, within the administrator's hard limit.
+    let limit = rustix::process::getrlimit(rustix::process::Resource::Nofile);
+    let wanted = limit.maximum.unwrap_or(8192).min(8192);
+    if limit.current.is_some_and(|current| current < wanted) {
+        let _ = rustix::process::setrlimit(
+            rustix::process::Resource::Nofile,
+            rustix::process::Rlimit {
+                current: Some(wanted),
+                maximum: limit.maximum,
+            },
+        );
     }
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
