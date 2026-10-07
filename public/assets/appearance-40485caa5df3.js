@@ -23,7 +23,7 @@ function sceneryFor(preset){
  const kind=preset==='seasons'?preset:'',epoch=++sceneryEpoch;
  layer.classList.toggle('has-season-scene',!!kind);
  if(kind!==sceneryKind){scenery?.destroy();scenery=null;sceneryKind=kind;}
- if(kind&&!scenery)import('./seasons.mjs').then(({mountSeasons})=>{
+ if(kind&&!scenery)import("/assets/seasons-18498b85a072.js").then(({mountSeasons})=>{
   if(epoch===sceneryEpoch&&root.dataset.appearance===kind&&!scenery)scenery=mountSeasons(layer);
  }).catch(()=>{});
 }

@@ -343,6 +343,7 @@ pub struct Trust {
     pub session_id: String,
     pub address: String,
     pub key: String,
+    pub previous_key: Option<String>,
     pub expires: i64,
 }
 #[derive(Clone)]

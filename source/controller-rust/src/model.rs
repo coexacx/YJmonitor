@@ -283,6 +283,8 @@ pub struct TelegramConfig {
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TelegramNodeState {
+    #[serde(default)]
+    pub was_offline: bool,
     #[serde(rename = "online")]
     pub online: bool,
     #[serde(rename = "offlineSince")]
@@ -309,6 +311,10 @@ pub struct RenewalMember {
 #[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TelegramEvent {
+    #[serde(default)]
+    pub group: bool,
+    #[serde(default)]
+    pub recovery: bool,
     #[serde(rename = "renewalDay")]
     pub renewal_day: String,
     #[serde(rename = "renewalNodes", deserialize_with = "null_default")]
@@ -347,8 +353,22 @@ pub struct TelegramTestResult {
 }
 
 #[derive(Clone, Default, Serialize, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct TelegramGroup {
+    pub enabled: bool,
+    pub chat_id: String,
+    pub title: String,
+    pub verified_at: i64,
+    pub last_success: i64,
+    pub last_error: String,
+    pub last_test_at: i64,
+    pub test: TelegramTestResult,
+}
+
+#[derive(Clone, Default, Serialize, Deserialize)]
 #[serde(default)]
 pub struct TelegramState {
+    pub group: TelegramGroup,
     #[serde(rename = "renewals", deserialize_with = "null_default")]
     pub renewals: HashMap<String, String>,
     #[serde(rename = "config")]

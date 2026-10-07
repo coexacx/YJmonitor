@@ -1,9 +1,11 @@
+mod group;
 use crate::{
     core::*,
     model::*,
     nodes::{renewal_day, renewal_due, zone},
 };
 use chrono::{DateTime, TimeZone};
+pub use group::api as group_api;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::time::Duration;
@@ -40,7 +42,7 @@ fn save(app: &App, i: &mut Inner, next: TelegramState) -> bool {
 }
 pub fn view(i: &Inner) -> Value {
     let s = &i.telegram;
-    json!({"enabled":s.config.enabled,"hasToken":!s.config.token.is_empty(),"chatId":s.config.chat_id,"notifyOnline":s.config.online,"notifyOffline":s.config.offline,"notifyRenewal":s.config.renewal,"notifyLogin":s.config.login,"offlineDelaySeconds":20,"pending":s.queue.len(),"lastSuccess":s.last_success,"lastError":if i.telegram_error.is_empty(){&s.last_error}else{&i.telegram_error},"test":s.test,"dropped":s.dropped})
+    json!({"group":s.group,"enabled":s.config.enabled,"hasToken":!s.config.token.is_empty(),"chatId":s.config.chat_id,"notifyOnline":s.config.online,"notifyOffline":s.config.offline,"notifyRenewal":s.config.renewal,"notifyLogin":s.config.login,"offlineDelaySeconds":20,"pending":s.queue.len(),"lastSuccess":s.last_success,"lastError":if i.telegram_error.is_empty(){&s.last_error}else{&i.telegram_error},"test":s.test,"dropped":s.dropped})
 }
 #[derive(Default, Deserialize)]
 #[serde(default, deny_unknown_fields, rename_all = "camelCase")]
@@ -105,6 +107,12 @@ pub fn api(app: &App, i: &mut Inner, c: &Context, body: &[u8]) -> ApiResult<ApiR
                 "请填写 Bot Token、接收人 ID，并选择通知事件",
             ));
         }
+        if v.clear_token || !v.token.is_empty() {
+            next.group.enabled = false;
+            next.group.verified_at = 0;
+            next.group.test = TelegramTestResult::default();
+            next.group.last_error = "Bot Token 已修改，请重新验证并启用群组通知".into();
+        }
         next.config = TelegramConfig {
             enabled: v.enabled,
             token: encrypted,
@@ -125,6 +133,7 @@ pub fn api(app: &App, i: &mut Inner, c: &Context, body: &[u8]) -> ApiResult<ApiR
                     TelegramNodeState {
                         online: n.public.online,
                         offline_since: 0,
+                        was_offline: !n.public.online,
                     },
                 )
             })
@@ -140,6 +149,7 @@ pub fn api(app: &App, i: &mut Inner, c: &Context, body: &[u8]) -> ApiResult<ApiR
         }
         next.queue.clear();
         next.test = TelegramTestResult::default();
+        next.group.test = TelegramTestResult::default();
         next.last_error.clear();
         if !save(app, i, next) {
             return Err(ApiError::internal());
@@ -197,6 +207,14 @@ fn member_current(i: &Inner, m: &RenewalMember) -> bool {
         })
 }
 fn event_current(i: &Inner, e: &TelegramEvent) -> bool {
+    if e.group
+        && (!i.telegram.group.enabled || !matches!(e.kind.as_str(), "online" | "offline" | "test"))
+    {
+        return false;
+    }
+    if !e.group && e.kind != "test" && !i.telegram.config.enabled {
+        return false;
+    }
     match e.kind.as_str() {
         "online" | "offline" => i
             .data
@@ -260,7 +278,7 @@ fn tick(app: &App, i: &mut Inner) {
     invalidate(app, i);
     i.expire_nodes();
     let t = now();
-    if !i.telegram.config.enabled || t < i.telegram_ready {
+    if (!i.telegram.config.enabled && !i.telegram.group.enabled) || t < i.telegram_ready {
         return;
     }
     let mut next = i.telegram.clone();
@@ -274,7 +292,8 @@ fn tick(app: &App, i: &mut Inner) {
         present.insert(id.clone());
         let known = next.nodes.contains_key(id);
         let mut state = next.nodes.get(id).cloned().unwrap_or_default();
-        let before = (state.online, state.offline_since);
+        let before = (state.online, state.offline_since, state.was_offline);
+        let recovery = state.was_offline;
         let mut kind = "";
         if node.public.online {
             if !state.online {
@@ -283,6 +302,7 @@ fn tick(app: &App, i: &mut Inner) {
             state = TelegramNodeState {
                 online: true,
                 offline_since: 0,
+                was_offline: false,
             };
         } else if state.online {
             if state.offline_since == 0 {
@@ -290,31 +310,52 @@ fn tick(app: &App, i: &mut Inner) {
             }
             if t - state.offline_since >= 20 {
                 kind = "offline";
-                state = TelegramNodeState::default();
+                state = TelegramNodeState {
+                    was_offline: true,
+                    ..Default::default()
+                };
             }
         }
-        changed |= !known || before != (state.online, state.offline_since);
+        changed |= !known || before != (state.online, state.offline_since, state.was_offline);
         next.nodes.insert(id.clone(), state);
-        if (kind == "online" && next.config.online) || (kind == "offline" && next.config.offline) {
-            if next.queue.len() >= LIMIT {
-                next.dropped += 1;
-                next.last_error = "通知队列已满，部分事件未发送".into()
-            } else {
-                next.queue.push(TelegramEvent {
-                    id: token()[..24].into(),
-                    node_id: id.clone(),
-                    name: node.public.name.clone(),
-                    site: i.data.site.name.clone(),
-                    kind: kind.into(),
-                    next_attempt: t + 5,
-                    at: t,
-                    ..Default::default()
-                });
+        if !kind.is_empty() {
+            let personal = next.config.enabled
+                && ((kind == "online" && next.config.online)
+                    || (kind == "offline" && next.config.offline));
+            for is_group in [false, true] {
+                if if is_group {
+                    !next.group.enabled
+                } else {
+                    !personal
+                } {
+                    continue;
+                }
+                if next.queue.len() >= LIMIT {
+                    next.dropped += 1;
+                    if is_group {
+                        next.group.last_error = "通知队列已满，部分事件未发送".into();
+                    } else {
+                        next.last_error = "通知队列已满，部分事件未发送".into();
+                    }
+                } else {
+                    next.queue.push(TelegramEvent {
+                        id: token()[..24].into(),
+                        node_id: id.clone(),
+                        name: node.public.name.clone(),
+                        site: i.data.site.name.clone(),
+                        kind: kind.into(),
+                        group: is_group,
+                        recovery,
+                        next_attempt: t + 5,
+                        at: t,
+                        ..Default::default()
+                    });
+                }
+                changed = true;
             }
-            changed = true;
         }
     }
-    if next.config.renewal {
+    if next.config.enabled && next.config.renewal {
         for n in &i.data.nodes {
             if !renewal_due(n, t)
                 || n.renewal_version.is_empty()
@@ -405,6 +446,9 @@ pub fn text(e: &TelegramEvent) -> String {
     let site = html(&e.site, 60);
     let footer = format!("\n\n<i>{when} · UTC+8</i>");
     let mut message = match e.kind.as_str() {
+        "test" if e.group => format!(
+            "🔔 <b>群组通知测试</b>\n{site}\n\n机器人管理员权限已确认。本群仅接收服务器上线、离线和恢复通知。"
+        ),
         "test" => format!("🔔 <b>通知测试</b>\n{site}\n\n通知已连接，后续提醒将发送到此会话。"),
         "security" => format!("🔐 <b>管理员登录</b>\n{site}\n\n{}", html(&e.name, 180)),
         "renewal" => {
@@ -464,6 +508,10 @@ pub fn text(e: &TelegramEvent) -> String {
         }
         "offline" => format!(
             "🔴 <b>服务器离线</b>\n{site}\n\n服务器  <b>{}</b>\n连续 20 秒未恢复连接，请检查服务器状态。",
+            html(&e.name, 60)
+        ),
+        "online" if e.recovery => format!(
+            "🟢 <b>服务器恢复</b>\n{site}\n\n服务器  <b>{}</b>\n连接已恢复，监控数据正在更新。",
             html(&e.name, 60)
         ),
         _ => format!(
@@ -590,6 +638,17 @@ async fn send(app: &App, secret: &str, chat: &str, text: &str) -> Delivery {
         wait: 0,
     })
 }
+fn due_index(queue: &[TelegramEvent], at: i64) -> Option<usize> {
+    let mut seen = [false; 2];
+    queue.iter().position(|e| {
+        let n = usize::from(e.group);
+        if seen[n] {
+            return false;
+        }
+        seen[n] = true;
+        e.next_attempt <= at
+    })
+}
 async fn dispatch(app: &App) {
     let chosen = {
         let mut i = app.lock();
@@ -597,24 +656,24 @@ async fn dispatch(app: &App) {
         if i.telegram.queue.is_empty() || t < i.telegram_next {
             return;
         }
-        let event = &i.telegram.queue[0];
-        if !event_current(&i, event) {
-            invalidate(app, &mut i);
+        invalidate(app, &mut i);
+        let Some(index) = due_index(&i.telegram.queue, t) else {
             return;
-        }
-        if event.next_attempt > t || (event.kind != "test" && !i.telegram.config.enabled) {
-            return;
-        }
+        };
         let mut next = i.telegram.clone();
-        next.queue[0].attempts += 1;
-        next.queue[0].next_attempt = t + 30;
+        next.queue[index].attempts += 1;
+        next.queue[index].next_attempt = t + 30;
         if !save(app, &mut i, next) {
             return;
         }
-        let event = i.telegram.queue[0].clone();
+        let event = i.telegram.queue[index].clone();
         let secret = app.unseal(LABEL, &i.telegram.config.token);
         let revision = i.telegram_revision;
-        let chat = i.telegram.config.chat_id.clone();
+        let chat = if event.group {
+            i.telegram.group.chat_id.clone()
+        } else {
+            i.telegram.config.chat_id.clone()
+        };
         i.telegram_next = t + 3;
         let cancel = app.0.stop.child_token();
         i.delivery = Some((event.clone(), cancel.clone()));
@@ -629,7 +688,7 @@ async fn dispatch(app: &App) {
             }
         } else if let Ok(secret) = std::str::from_utf8(&raw) {
             let message = text(&event);
-            tokio::select! {_=cancel.cancelled()=>{let mut i=app.lock();if i.delivery.as_ref().is_some_and(|(e,_)|e.id==event.id){i.delivery=None;}return},r=send(app,secret,&chat,&message)=>r}
+            tokio::select! {_=cancel.cancelled()=>{let mut i=app.lock();if i.delivery.as_ref().is_some_and(|(e,_)|e.id==event.id){i.delivery=None;}return},r=async { if event.group && let Err(error)=group::verify(app,secret,&chat).await { return Delivery { error:error.message, retry: error.status>=500, wait:30 }; } send(app,secret,&chat,&message).await }=>r}
         } else {
             Delivery {
                 error: "通知密钥不可用，请重新保存 Bot Token".into(),
@@ -647,30 +706,47 @@ async fn dispatch(app: &App) {
         i.delivery = None;
     }
     if i.telegram_revision != revision
-        || i.telegram.queue.first().is_none_or(|e| e.id != event.id)
+        || !i.telegram.queue.iter().any(|e| e.id == event.id)
         || !event_current(&i, &event)
     {
         return;
     }
     let mut next = i.telegram.clone();
-    next.last_error = result.error.clone();
+    let Some(index) = next.queue.iter().position(|e| e.id == event.id) else {
+        return;
+    };
+    if event.group {
+        next.group.last_error = result.error.clone();
+    } else {
+        next.last_error = result.error.clone();
+    }
     let finished = result.error.is_empty() || !result.retry || event.attempts >= 5;
     if result.error.is_empty() {
-        next.last_success = now();
+        if event.group {
+            next.group.last_success = now();
+            next.group.verified_at = now();
+        } else {
+            next.last_success = now();
+        }
     }
     if finished {
-        next.queue.remove(0);
-        if event.kind == "test" && next.test.id == event.id {
-            next.test.status = if result.error.is_empty() {
+        next.queue.remove(index);
+        let test = if event.group {
+            &mut next.group.test
+        } else {
+            &mut next.test
+        };
+        if event.kind == "test" && test.id == event.id {
+            test.status = if result.error.is_empty() {
                 "sent"
             } else {
                 "failed"
             }
             .into();
-            next.test.error = result.error.clone();
+            test.error = result.error.clone();
         }
     } else {
-        next.queue[0].next_attempt = now() + result.wait.max(1i64 << event.attempts);
+        next.queue[index].next_attempt = now() + result.wait.max(1i64 << event.attempts);
     }
     if save(app, &mut i, next) && finished {
         let name = if event.kind == "test" {
@@ -785,6 +861,7 @@ mod queue_tests {
                 TelegramNodeState {
                     online: true,
                     offline_since: now() - 21,
+                    was_offline: false,
                 },
             );
             tick(&app, &mut i);

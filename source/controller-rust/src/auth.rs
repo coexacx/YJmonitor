@@ -21,6 +21,12 @@ struct Password {
 }
 #[derive(Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
+struct UsernameInput {
+    username: String,
+    current: String,
+}
+#[derive(Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
 struct Mfa {
     password: String,
     code: String,
@@ -223,6 +229,55 @@ pub async fn password(app: App, c: Context, body: Vec<u8>) -> ApiResult<ApiReply
     app.record(&mut i, "password_changed", &name);
     Ok(ApiReply::session(i.info(&x), &x.id))
 }
+pub async fn change_username(app: App, c: Context, body: Vec<u8>) -> ApiResult<ApiReply> {
+    let mut v: UsernameInput = decode(&body)?;
+    v.username = v.username.trim().to_owned();
+    if !username(&v.username) {
+        return Err(ApiError::new(
+            400,
+            "用户名需为 1–32 位，以字母或下划线开头，可含字母、数字、下划线、点和连字符",
+        ));
+    }
+    let _slot = app
+        .0
+        .login_slots
+        .clone()
+        .try_acquire_owned()
+        .map_err(|_| ApiError::rate("请稍后再试", 1))?;
+    let (x, hash, version) = {
+        let mut i = app.lock();
+        let x = app.guard(&mut i, &c, true, true)?;
+        if v.username == i.auth.username {
+            return Err(ApiError::new(400, "新用户名与当前用户名相同"));
+        }
+        // Share the password-change limit; adding this action must not create
+        // another independent budget for guessing the current password.
+        reserve(&app, &mut i, "password:account", 5, false)?;
+        (x, i.auth.hash.clone(), i.auth.version.clone())
+    };
+    if !password_matches(hash, v.current).await {
+        return Err(ApiError::new(400, "当前密码不正确"));
+    }
+    let mut i = app.lock();
+    app.guard(&mut i, &c, true, true)?;
+    if i.auth.version != version {
+        return Err(ApiError::new(409, "账户设置已变化，请重新登录"));
+    }
+    let old = i.auth.username.clone();
+    let mut auth = i.auth.clone();
+    auth.username = v.username;
+    auth.version = token();
+    save_auth(&app, &mut i, auth)?;
+    invalidate(&mut i);
+    let next = i.new_session(&x.id, true)?;
+    if let Some(session) = i.sessions.get_mut(&next.id) {
+        session.source = x.source;
+        session.device = x.device;
+    }
+    let subject = format!("{} → {}", old, i.auth.username);
+    app.record(&mut i, "username_changed", &subject);
+    Ok(ApiReply::session(i.info(&next), &next.id))
+}
 pub async fn mfa(app: App, c: Context, body: Vec<u8>) -> ApiResult<ApiReply> {
     if c.method != "POST" {
         return Err(ApiError::new(405, "请求方法不正确"));
@@ -400,6 +455,195 @@ pub fn require_elevated(i: &Inner, c: &Context) -> ApiResult<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct AccountFixture {
+        app: App,
+        session: Session,
+        password: String,
+    }
+    impl AccountFixture {
+        fn new() -> Self {
+            let dir = std::env::temp_dir().join(format!("probe-username-{}", token()));
+            std::fs::create_dir(&dir).unwrap();
+            let password = token();
+            atomic_json(
+                &dir.join("auth.json"),
+                &Auth {
+                    username: "admin".into(),
+                    hash: bcrypt::hash(&password, 4).unwrap(),
+                    version: token(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            atomic_json(
+                &dir.join("nodes.json"),
+                &crate::model::Data {
+                    schema: 2,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            let app = App::new(dir, "https://account.test".into(), false).unwrap();
+            let session = app.lock().new_session("", true).unwrap();
+            Self {
+                app,
+                session,
+                password,
+            }
+        }
+        fn context(&self) -> Context {
+            let mut h = axum::http::HeaderMap::new();
+            h.insert(
+                "Cookie",
+                format!("{COOKIE}={}", self.session.id).parse().unwrap(),
+            );
+            h.insert("Origin", "https://account.test".parse().unwrap());
+            h.insert("X-CSRF-Token", self.session.csrf.parse().unwrap());
+            Context::new(
+                "POST",
+                "/api/admin/username",
+                h,
+                "127.0.0.1:9999".parse().unwrap(),
+                &self.app.0.origin,
+            )
+        }
+        async fn rename(&self, name: &str, password: &str) -> ApiResult<ApiReply> {
+            change_username(
+                self.app.clone(),
+                self.context(),
+                serde_json::to_vec(&json!({"username":name,"current":password})).unwrap(),
+            )
+            .await
+        }
+    }
+    impl Drop for AccountFixture {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.app.0.dir);
+        }
+    }
+    #[tokio::test]
+    async fn username_change_preserves_password_mfa_and_recovery_but_rotates_sessions() {
+        let f = AccountFixture::new();
+        let other = f.app.lock().new_session("", true).unwrap();
+        let sealed = f
+            .app
+            .seal("admin:mfa", b"fixture authenticator secret")
+            .unwrap();
+        let recovery = token();
+        let (hash, version) = {
+            let mut i = f.app.lock();
+            i.auth.mfa = sealed.clone();
+            i.auth.mfa_last = 42;
+            i.auth.recovery = vec![recovery.clone()];
+            (i.auth.hash.clone(), i.auth.version.clone())
+        };
+        let reply = f.rename("operator.name-2", &f.password).await.unwrap();
+        assert_eq!(reply.value["username"], "operator.name-2");
+        assert_eq!(reply.value["authenticated"], true);
+        assert_ne!(reply.value["csrf"].as_str().unwrap(), f.session.csrf);
+        let stored: Auth = read_json(&f.app.0.dir.join("auth.json")).unwrap();
+        assert_eq!(stored.username, "operator.name-2");
+        assert_eq!(stored.hash, hash);
+        assert_eq!(stored.mfa, sealed);
+        assert_eq!(stored.mfa_last, 42);
+        assert_eq!(stored.recovery, vec![recovery]);
+        assert_ne!(stored.version, version);
+        let mut i = f.app.lock();
+        assert!(i.session(&f.session.id).is_none());
+        assert!(i.session(&other.id).is_none());
+        assert_eq!(i.sessions.len(), 1);
+        assert_eq!(i.audit.last().unwrap().action, "username_changed");
+    }
+    #[tokio::test]
+    async fn username_change_rejects_wrong_password_without_changing_account() {
+        let f = AccountFixture::new();
+        let version = f.app.lock().auth.version.clone();
+        assert_eq!(
+            f.rename("operator", "wrong password")
+                .await
+                .err()
+                .unwrap()
+                .status,
+            400
+        );
+        let mut i = f.app.lock();
+        assert_eq!(i.auth.username, "admin");
+        assert_eq!(i.auth.version, version);
+        assert!(i.session(&f.session.id).is_some());
+    }
+    #[tokio::test]
+    async fn username_change_requires_admin_and_csrf() {
+        let f = AccountFixture::new();
+        let mut c = f.context();
+        c.headers.remove("X-CSRF-Token");
+        let raw = serde_json::to_vec(&json!({"username":"operator","current":f.password})).unwrap();
+        assert_eq!(
+            change_username(f.app.clone(), c, raw.clone())
+                .await
+                .err()
+                .unwrap()
+                .status,
+            403
+        );
+        f.app.lock().sessions.get_mut(&f.session.id).unwrap().auth = false;
+        assert_eq!(
+            change_username(f.app.clone(), f.context(), raw)
+                .await
+                .err()
+                .unwrap()
+                .status,
+            401
+        );
+        assert_eq!(f.app.lock().auth.username, "admin");
+    }
+    #[tokio::test]
+    async fn username_change_rejects_invalid_or_unchanged_names() {
+        let f = AccountFixture::new();
+        for name in [
+            "",
+            "1admin",
+            "a b",
+            "root\nname",
+            "管理员",
+            "admin",
+            "../other",
+            "abcdefghijklmnopqrstuvwxyz0123456789",
+        ] {
+            assert_eq!(
+                f.rename(name, &f.password).await.err().unwrap().status,
+                400,
+                "{name}"
+            );
+        }
+        assert_eq!(f.app.lock().auth.username, "admin");
+    }
+    #[tokio::test]
+    async fn username_change_shares_password_guessing_limit() {
+        let f = AccountFixture::new();
+        for _ in 0..5 {
+            assert_eq!(
+                f.rename("operator", "wrong").await.err().unwrap().status,
+                400
+            );
+        }
+        assert_eq!(
+            f.rename("operator", &f.password)
+                .await
+                .err()
+                .unwrap()
+                .status,
+            429
+        );
+        assert_eq!(f.app.lock().limits.sources["password:account"].count, 5);
+    }
+    #[test]
+    fn username_payload_rejects_unrelated_security_fields() {
+        assert!(
+            decode::<UsernameInput>(br#"{"username":"operator","current":"test","mfa":""}"#)
+                .is_err()
+        );
+    }
     #[test]
     fn rfc_totp_and_replay() {
         let secret = BASE32_NOPAD.encode(b"12345678901234567890");

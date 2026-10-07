@@ -97,16 +97,23 @@ impl Message {
         Ok(v)
     }
 }
-pub type Output = mpsc::Sender<WS>;
+pub type Output = vistart_probe_agent::transport_queue::Sender<WS>;
 pub async fn send(out: &Output, message: Message) -> Result<(), &'static str> {
+    let bulk = vistart_probe_agent::transport_queue::bulk(&message.kind);
     let raw = serde_json::to_string(&message).map_err(|_| "encoding failed")?;
     if raw.len() > MAX_MESSAGE {
         return Err("frame too large");
     }
-    timeout(Duration::from_secs(5), out.send(WS::Text(raw.into())))
-        .await
-        .map_err(|_| "writer timeout")?
-        .map_err(|_| "writer closed")
+    let frame = WS::Text(raw.into());
+    if bulk {
+        timeout(Duration::from_secs(5), out.send_bulk(frame))
+            .await
+            .map_err(|_| "tunnel writer timeout")?
+            .map_err(|_| "tunnel writer closed")
+    } else {
+        out.try_control(frame)
+            .map_err(|_| "control writer unavailable")
+    }
 }
 struct TunnelSlot {
     input: mpsc::Sender<Vec<u8>>,
@@ -133,7 +140,7 @@ impl Drop for PendingTunnel {
             slot.stop.cancel();
         }
         let raw = serde_json::to_string(&Message::new("ssh_close", &self.id)).unwrap();
-        if self.link.output.try_send(WS::Text(raw.into())).is_err() {
+        if self.link.output.try_bulk(WS::Text(raw.into())).is_err() {
             self.link.stop.cancel();
         }
     }
@@ -467,7 +474,10 @@ pub async fn agent_handler(
 }
 async fn agent_loop(app: App, id: String, digest: String, ws: WebSocket) {
     let (mut writer, mut reader) = ws.split();
-    let (out, mut rx) = mpsc::channel::<WS>(32);
+    let (out, mut rx) = vistart_probe_agent::transport_queue::channel::<WS>(
+        vistart_probe_agent::wire::MAX_TUNNELS * WINDOW + 16,
+        32,
+    );
     let link = Arc::new(AgentLink {
         stop: app.0.stop.child_token(),
         output: out,
@@ -495,7 +505,7 @@ async fn agent_loop(app: App, id: String, digest: String, ws: WebSocket) {
         stop.cancel();
     });
     let result=async{let(mut sequence,mut frames,mut traffic)=(0u64,0usize,0usize);let mut window=Instant::now();let mut last=Instant::now();let mut rate_time=last;let mut credits=4.0f64;let mut ping:Option<(String,Instant)>=None;
- loop{let next=tokio::select!{_=link.stop.cancelled()=>return Ok::<(),&'static str>(()),_=tokio::time::sleep_until((last+Duration::from_secs(15)).into())=>return Err("metrics timeout"),v=reader.next()=>v};let raw=match next{Some(Ok(WS::Text(s)))=>s,Some(Ok(WS::Ping(b)))=>{timeout(Duration::from_secs(5),link.output.send(WS::Pong(b))).await.map_err(|_|"writer timeout")?.map_err(|_|"writer closed")?;continue},Some(Ok(WS::Pong(_)))=>continue,_=>return Err("agent connection closed")};let m=Message::parse(raw.as_bytes())?;let t=Instant::now();if t.duration_since(window)>=Duration::from_secs(1){window=t;frames=0;traffic=0}frames+=1;let bytes=m.bytes()?;traffic=traffic.saturating_add(bytes.len());if frames>2000||traffic>8*1024*1024{return Err("agent traffic limit")}
+ loop{let next=tokio::select!{_=link.stop.cancelled()=>return Ok::<(),&'static str>(()),_=tokio::time::sleep_until((last+Duration::from_secs(15)).into())=>return Err("metrics timeout"),v=reader.next()=>v};let raw=match next{Some(Ok(WS::Text(s)))=>s,Some(Ok(WS::Ping(b)))=>{link.output.try_control(WS::Pong(b)).map_err(|_|"control writer unavailable")?;continue},Some(Ok(WS::Pong(_)))=>continue,_=>return Err("agent connection closed")};let m=Message::parse(raw.as_bytes())?;let t=Instant::now();if t.duration_since(window)>=Duration::from_secs(1){window=t;frames=0;traffic=0}frames+=1;let bytes=m.bytes()?;traffic=traffic.saturating_add(bytes.len());if frames>2000||traffic>8*1024*1024{return Err("agent traffic limit")}
  match m.kind.as_str(){"metrics"=>{let metrics=m.metrics.ok_or("metrics missing")?;credits=(credits+t.duration_since(rate_time).as_secs_f64()*4.0).min(4.0);rate_time=t;if m.sequence<=sequence||credits<1.0||!valid_metrics(&metrics){return Err("invalid metrics")};credits-=1.0;sequence=m.sequence;let latency=metrics.latency_probe;{let mut i=app.lock();if !apply(&mut i,&id,metrics.clone()){return Err("node removed")}
 }last=t;let mut ack=Message::new("ack","");ack.sequence=sequence;send(&link.output,ack).await?;if latency&&ping.as_ref().is_none_or(|(_,at)|at.elapsed()>Duration::from_secs(10)){let nonce=token()[..32].to_string();send(&link.output,Message::new("ping",&nonce)).await?;ping=Some((nonce,Instant::now()));}},"pong"=>{if let Some(ms)=latency_reply(&mut ping,&m.session,Instant::now()){let mut i=app.lock();if let Some(n)=i.data.nodes.iter_mut().find(|n|n.public.id==id){n.public.latency_ms=Some(ms);n.latency_at=now();}}},"ssh_ready"=>{let mut all=link.tunnels.lock().unwrap();if let Some(slot)=all.get_mut(&m.session)&& let Some(ready)=slot.ready.take(){let _=ready.send(m.error.is_empty());}},"ssh_ack"=>{if let Some(slot)=link.tunnels.lock().unwrap().get(&m.session)&& slot.credits.available_permits()<WINDOW{slot.credits.add_permits(1);}},"ssh_data"=>{if let Some(slot)=link.tunnels.lock().unwrap().get(&m.session)&& slot.input.try_send(bytes).is_err(){slot.stop.cancel();}},"ssh_close"=>{if let Some(slot)=link.tunnels.lock().unwrap().get(&m.session){slot.stop.cancel();}},_=>return Err("unsupported agent message")}
  }}.await;
@@ -610,7 +620,7 @@ mod cancellation_tests {
     use super::*;
     #[tokio::test]
     async fn cancelled_handshake_releases_slot_and_closes_remote() {
-        let (output, mut rx) = mpsc::channel(4);
+        let (output, mut rx) = vistart_probe_agent::transport_queue::channel(4, 4);
         let link = Arc::new(AgentLink {
             stop: CancellationToken::new(),
             output,

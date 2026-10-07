@@ -12,7 +12,7 @@ parser.add_argument("--agent-amd64",type=pathlib.Path,required=True)
 parser.add_argument("--agent-arm64",type=pathlib.Path,required=True)
 args=parser.parse_args()
 root=pathlib.Path(__file__).resolve().parent.parent
-version="0.11.1"
+version="0.11.2"
 flavor="rust" if args.variant=="rust" else "panel"
 out=args.output.resolve()
 if out==root or root in out.parents: raise SystemExit("Release output must be outside the source tree")
@@ -37,7 +37,7 @@ for section in ["app","bin","docs","ops","public","source","THIRD-PARTY-NOTICES"
             if p.suffix==".log": continue
             if p.suffix in (".log",".pyc",".zip") or p.name in (".env","signing.key"): raise SystemExit("Unexpected runtime/private file: "+str(rel))
             files[str(rel)]=p.read_bytes()
-for name in ["README.md","LICENSE","SECURITY.md","install.sh","manage.sh",".gitignore",".gitattributes"]:
+for name in ["README.md","LICENSE","SECURITY.md","install.sh","manage.sh","migrate-repository.sh",".gitignore",".gitattributes"]:
     files[name]=(root/name).read_bytes()
 files["storage/.gitkeep"]=b""
 sums={k:hashlib.sha256(v).hexdigest() for k,v in files.items()}
@@ -79,11 +79,11 @@ for arch in ["amd64","arm64"]:
     expected_machine=62 if arch=="amd64" else 183
     if raw[:4]!=b"\x7fELF" or int.from_bytes(raw[18:20],"little")!=expected_machine:
         raise SystemExit("Agent is not the expected ELF architecture")
-    name=f"vistart-probe-agent-0.2.2-linux-{arch}"
+    name=f"vistart-probe-agent-0.2.3-linux-{arch}"
     shutil.copyfile(path,out/name)
     (out/name).chmod(0o755)
     agents[arch]={"name":name,"size":len(raw),"sha256":hashlib.sha256(raw).hexdigest()}
-sign("stable.json","0.2.2",agents)
+sign("stable.json","0.2.3",agents)
 
 (out/"release-public.txt").write_text(anchor+"\n")
 shutil.copyfile(root/("install.sh" if args.variant=="rust" else "install.sh"),out/("install.sh" if args.variant=="rust" else "install.sh"))

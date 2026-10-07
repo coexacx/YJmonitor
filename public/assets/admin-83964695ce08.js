@@ -1,12 +1,12 @@
-import {showThemes} from './themes.mjs';
-import {endAppearancePreview} from './appearance.mjs';
-import {setupLeaseFields,leaseInput,money,cycleLabel,showBilling} from './billing.mjs';
-import {createInspectorUI} from './inspector.mjs';
-import {createOperations} from './operations.mjs';
-import {authenticatorCanvas} from './authenticator.mjs';
-import {createTerminalUI} from './terminal.mjs';
-import {countries as allCountries} from './countries.mjs';
-import {createRenewalUI,formatExpiry,localExpiry} from './renewals.mjs';
+import {showThemes} from "/assets/themes-0ffe18209439.js";
+import {endAppearancePreview} from "/assets/appearance-40485caa5df3.js";
+import {setupLeaseFields,leaseInput,money,cycleLabel,showBilling} from "/assets/billing-15dcd5a8ce66.js";
+import {createInspectorUI} from "/assets/inspector-5d14e98d3224.js";
+import {createOperations} from "/assets/operations-2a02f5588e43.js";
+import {authenticatorCanvas} from "/assets/authenticator-19965621ba87.js";
+import {createTerminalUI} from "/assets/terminal-76a2ce392fe2.js";
+import {countries as allCountries} from "/assets/countries-3dabb5bbec57.js";
+import {createRenewalUI,formatExpiry,localExpiry} from "/assets/renewals-8bbd577cc65f.js";
 export function initAdmin(hooks){
  const {el,icon,flag}=hooks,$=s=>document.querySelector(s);
  let auth={authenticated:false},csrf='',records=[],site={name:'Vistart Probe',public:true,refreshSeconds:5},activeTab='overview',adminOpen=false,removeId=null,terminalId=null,commands=[],toastTimer,loading=false;

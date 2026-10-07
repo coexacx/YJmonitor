@@ -1,29 +1,29 @@
-# 羽迹探针 · Rust 独立版
+# YJmonitor · 羽迹探针
 
 Nginx + Rust 单二进制服务器探针。页面、网页安装向导、API 与 WSS 均内嵌在主控程序中，运行无需 PHP-FPM、数据库、Node.js 或 Rust 编译环境。
 
-[下载完整安装包](https://github.com/coexacx/yuji-probe-rust/releases/latest) · [一键安装与宝塔部署](docs/Nginx-Rust部署教程.md) · [宝塔 Nginx 配置位置与完整示例](docs/宝塔Nginx配置说明.md) · [从原仓库迁移](docs/仓库迁移-0.10.1.md) · [构建源码](ops/BUILD.md)
+[下载完整安装包](https://github.com/coexacx/YJmonitor/releases/latest) · [一键安装与宝塔部署](docs/Nginx-Rust部署教程.md) · [宝塔 Nginx 配置位置与完整示例](docs/宝塔Nginx配置说明.md) · [从原仓库迁移](docs/仓库迁移-0.10.1.md) · [构建源码](ops/BUILD.md)
 
-本仓库独立维护 Nginx + Rust 版。原 [Nginx + PHP + Rust 项目](https://github.com/coexacx/yuji-probe) 保留自己的发行与更新通道。本仓库的安装器、主控更新、Agent 下载全部使用 **coexacx/yuji-probe-rust**。
+本仓库独立维护 Nginx + Rust 版。原 [Nginx + PHP + Rust 项目](https://github.com/coexacx/yuji-probe) 保留自己的发行与更新通道。本仓库的安装器、主控更新、Agent 下载全部使用 **coexacx/YJmonitor**。
 
 ## 功能
 
 - 公开看板：全球国家与国旗、CPU、内存、已启用 Swap、磁盘、网卡实时速率和累计上下行。
-- 管理后台：自动部署 Agent、供应商与到期日、续费周期与支出汇总、聚合续费提醒、Telegram 通知、常用命令。
+- 管理后台：自动部署 Agent、供应商与到期日、续费周期与支出汇总、聚合续费提醒、个人与群组 Telegram 通知、常用命令。
 - 浏览器 SSH / SFTP：手机快捷键与粘贴、多标签、目录浏览、新建文件与目录、上传下载队列、分块续传、UTF-8 编辑和冲突检查。
-- 终端、文件浏览与传输使用独立 SSH 连接；保活与重新协商分别计时。异常断线五分钟内可恢复原 Shell，只允许原登录恢复；主动断开、关闭或退出登录会结束会话，不自动重发命令。
-- 二步验证、一次性恢复码、设备撤销、加密备份、S3 / WebDAV 异地保存与跨域名迁移。
+- 浏览器文件传输使用独立 WSS，文件连接异常可单独重试；终端、文件浏览、传输、资源查询使用独立 SSH 连接；保活与重新协商分别计时。异常断线五分钟内可恢复原 Shell，只允许原登录恢复；主动断开、关闭或退出登录会结束会话，不自动重发命令。
+- 管理员用户名修改、二步验证、一次性恢复码、设备撤销、加密备份、S3 / WebDAV 异地保存与跨域名迁移。
 - 五套主题和自定义主题包，支持背景图、配色、局部样式与站点图标。
 - 签名更新、健康检查、失败恢复与手动回退。
 
 ## 一键安装与管理
 
 ~~~sh
-curl -fL --proto '=https' --proto-redir '=https' --tlsv1.2 https://raw.githubusercontent.com/coexacx/yuji-probe-rust/v0.11.1/install.sh -o /root/yuji-install.sh
+curl -fL --proto '=https' --proto-redir '=https' --tlsv1.2 https://raw.githubusercontent.com/coexacx/YJmonitor/v0.11.2/install.sh -o /root/yuji-install.sh
 bash /root/yuji-install.sh
 ~~~
 
-只填写站点名称，安装结束显示 **IP:端口** 与随机生成的管理员密码。运行 sudo yuji-probe 进入管理菜单。
+安装脚本自动创建服务用户、私有数据目录并设置权限，无需手动准备。只填写站点名称，安装结束显示 **IP:端口** 与随机生成的管理员密码。运行 sudo YJ 进入管理菜单。
 
 基础安装保持 IP:端口入口。需要域名访问时，在管理菜单选择 **13 配置 Nginx + HTTPS**，填写已解析域名，自动申请证书、设置反向代理与续期。复用现有 Nginx；未安装时安装签名预编译包。Cloudflare 橙云可保持开启，HTTP 验证受阻时支持受限 API Token 的 DNS 验证。[自动 HTTPS 使用说明](docs/自动HTTPS.md)。
 
@@ -31,9 +31,13 @@ bash /root/yuji-install.sh
 
 [Linux 安装与菜单说明](docs/Linux一键安装.md) · [0.10.3 部署变更](docs/部署变更-0.10.3.md)。已有手动部署继续使用原服务和后台签名更新，不重新安装。
 
+已有 Rust 安装先按 [仓库更名迁移说明](docs/仓库更名-0.11.2.md) 切换更新通道。更名保留原仓库历史、标签与发行文件；安装包名称及内部服务名保持兼容。
+
+[群组通知设置](docs/Telegram群组通知.md) · [终端链路与流控](docs/终端链路-0.11.2.md)
+
 ## 发行内容
 
-主控 0.11.1，Agent 0.2.2。[自动 HTTPS 与验收记录](docs/验收-0.11.1.md)。[新版终端工作区](docs/终端工作区-0.11.0.md)。[终端滚动与输出记录说明](docs/终端回滚记录-0.10.2.md)。完整包为 **yuji-probe-rust-0.11.1.zip**，包含 amd64 / arm64 预编译主控与完整源码；Agent 二进制、签名清单及安装脚本在同一 Release。GitHub 自动生成的 Source code 包不含主控二进制。
+主控 0.11.2，Agent 0.2.3。[本版功能与验收记录](docs/验收-0.11.2.md)。[自动 HTTPS 验收记录](docs/验收-0.11.1.md)。[新版终端工作区](docs/终端工作区-0.11.0.md)。[终端滚动与输出记录说明](docs/终端回滚记录-0.10.2.md)。完整包为 **yuji-probe-rust-0.11.2.zip**，包含 amd64 / arm64 预编译主控与完整源码；Agent 二进制、签名清单及安装脚本在同一 Release。GitHub 自动生成的 Source code 包不含主控二进制。
 
 更新只检查本仓库 v* 正式发行版。下载核对 Ed25519 签名、版本、架构、长度与 SHA-256，失败即停止。普通用户不需要 GitHub Token 或编译环境。
 
@@ -41,7 +45,7 @@ bash /root/yuji-install.sh
 
 新安装可通过 IP:端口查看面板；配置 HTTPS 后由同机 Nginx 代理，Rust 监听回环地址。状态目录位于 Web 公开目录之外，运行服务使用独立系统用户。一键安装通过私有标准输入初始化；手动 HTTPS 部署也支持服务器私有所有权链接。安装包不包含预设管理员、真实节点或运行密钥。
 
-本轮拆分保留现有协议、数据格式和发布验签公钥，已安装 Agent 无需重装。二进制名称和 Agent 服务名沿用原项目，避免破坏迁移兼容。
+本版保留现有协议、数据格式和发布验签公钥，已安装 Agent 无需重装。建议在后台更新到 Agent 0.2.3，使用有界控制优先队列。二进制名称和 Agent 服务名沿用原项目，避免破坏迁移兼容。
 
 主控仍有一个上游 RSA 依赖告警；当前受管私钥仅使用 Ed25519，未调用受影响的 RSA 私钥操作。详见 [安全边界](docs/RUST-SECURITY.md)。扫描不能保证不存在未知漏洞。
 

@@ -67,7 +67,7 @@ def summary():
 def update(rollback=False):
  m=helper();cfg=trusted(pathlib.Path('/etc/yuji-probe-rust-updaters/main.json'));request={'at':int(time.time()),'action':'rollback' if rollback else 'update'}
  if not rollback:
-  with urllib.request.urlopen(urllib.request.Request('https://api.github.com/repos/coexacx/yuji-probe-rust/releases/latest',headers={'User-Agent':'Yuji-Probe-Manager'}),timeout=15) as r:data=json.loads(r.read(131072))
+  with urllib.request.urlopen(urllib.request.Request('https://api.github.com/repos/coexacx/YJmonitor/releases/latest',headers={'User-Agent':'Yuji-Probe-Manager'}),timeout=15) as r:data=json.loads(r.read(131072))
   version=data.get('tag_name','').removeprefix('v')
   if not re.fullmatch(r'\d{1,5}\.\d{1,5}\.\d{1,5}',version):raise ValueError('版本信息无效')
   current=subprocess.check_output([str(ROOT/'bin'/('probe-linux-'+ARCH)),'--version'],text=True).split()[1]
@@ -120,7 +120,9 @@ def uninstall():
   subprocess.run(['systemctl','disable','--now',service],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
   (pathlib.Path('/etc/systemd/system')/service).unlink(missing_ok=True)
  pathlib.Path('/etc/yuji-probe-rust-updaters/main.json').unlink(missing_ok=True)
- pathlib.Path('/usr/local/bin/yuji-probe').unlink(missing_ok=True)
+ import importlib.util
+ spec=importlib.util.spec_from_file_location('menu_command',ROOT/'ops/install-command.py');menu=importlib.util.module_from_spec(spec);spec.loader.exec_module(menu)
+ menu.remove(ROOT)
  shutil.rmtree(ROOT);command('systemctl','daemon-reload');print('\n  程序已卸载，面板数据已保留。')
 def main():
  if os.geteuid()!=0:raise ValueError('请使用 root 运行')

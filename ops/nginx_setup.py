@@ -982,7 +982,7 @@ def setup(settings, configure, state):
         print('  公网 HTTPS 检查通过。')
     except (OSError, ValueError, urllib.error.URLError):
         print('  本机 HTTPS 已通过。公网检查未通过，请检查安全组、Cloudflare Full (strict) 与 WAF。')
-    print('  使用说明：https://github.com/coexacx/yuji-probe-rust/blob/main/docs/自动HTTPS.md')
+    print('  使用说明：https://github.com/coexacx/YJmonitor/blob/main/docs/自动HTTPS.md')
 
 
 def unconfigure():
@@ -1042,7 +1042,7 @@ def renew():
 if __name__ == '__main__':
     try:
         if os.geteuid() != 0 or sys.argv[1:] != ['--renew']:
-            raise ValueError('请使用 sudo yuji-probe https；本入口仅供证书续期')
+            raise ValueError('请使用 sudo YJ https；本入口仅供证书续期')
         import fcntl
         os.umask(0o077)
         with open('/run/yuji-probe-manage.lock', 'a') as lock:

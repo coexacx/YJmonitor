@@ -3,8 +3,8 @@ set +x
 set -Eeuo pipefail
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 umask 077
-readonly YUJI_VERSION=0.11.1
-readonly YUJI_RELEASE_BASE=https://github.com/coexacx/yuji-probe-rust/releases/download/v0.11.1
+readonly YUJI_VERSION=0.11.2
+readonly YUJI_RELEASE_BASE=https://github.com/coexacx/YJmonitor/releases/download/v0.11.2
 readonly YUJI_PUBLIC_KEY=o8+DdHbo82V7fxJEIiEhe5AK/frR91Fz5vjf/pDAnts=
 yuji_work='' yuji_name='' yuji_port=19281 yuji_cache='' yuji_check=0
 die(){ printf '\n  %s\n\n' "$*" >&2; exit 1; }
@@ -43,7 +43,7 @@ flock -n 9 || die '另一项安装正在进行。'
 if [[ -f /opt/yuji-probe/manage.sh && -f /etc/yuji-probe/instance.json ]]; then
  exec bash /opt/yuji-probe/manage.sh
 fi
-for yuji_path in /opt/yuji-probe /var/lib/yuji-probe /etc/yuji-probe /etc/systemd/system/yuji-probe.service; do
+for yuji_path in /opt/yuji-probe /var/lib/yuji-probe /etc/yuji-probe /etc/systemd/system/yuji-probe.service /usr/local/bin/YJ /usr/local/bin/yuji-probe; do
  [[ ! -e "$yuji_path" && ! -L "$yuji_path" ]] || die "已有 $yuji_path，安装已停止。现有站点请按升级文档操作。"
 done
 getent passwd yuji-probe >/dev/null && die 'yuji-probe 系统账户已存在，请先核对现有部署。'
@@ -151,8 +151,7 @@ find /opt/yuji-probe -type f -exec chmod 0644 {} +
 chmod 0755 /opt/yuji-probe/bin/probe-linux-* /opt/yuji-probe/manage.sh
 rm -f /opt/yuji-probe/storage/.gitkeep
 rmdir /opt/yuji-probe/storage
-useradd --system --user-group --home-dir /var/lib/yuji-probe --shell /usr/sbin/nologin yuji-probe
-install -d -m 0700 -o yuji-probe -g yuji-probe /var/lib/yuji-probe /var/lib/yuji-probe/control
+python3 /opt/yuji-probe/ops/prepare-service.py --root /opt/yuji-probe --data /var/lib/yuji-probe --user yuji-probe
 ln -s /var/lib/yuji-probe /opt/yuji-probe/storage
 install -d -m 0700 /etc/yuji-probe
 python3 - "$yuji_name" "$yuji_origin" <<'PYINIT'
@@ -165,17 +164,13 @@ path.chmod(0o600)
 PYINIT
 python3 -c 'import json;d=json.load(open("/etc/yuji-probe/initial-admin.json"));d.pop("url");print(json.dumps(d))' | runuser -u yuji-probe -- /opt/yuji-probe/bin/probe-linux-"$yuji_arch" -web -state /var/lib/yuji-probe/control -origin "$yuji_origin" --install
 python3 /opt/yuji-probe/ops/manage.py configure "$yuji_origin" "$yuji_port"
-cat > /usr/local/bin/yuji-probe <<'PYWRAPPER'
-#!/bin/sh
-exec /bin/bash /opt/yuji-probe/manage.sh "$@"
-PYWRAPPER
-chmod 0755 /usr/local/bin/yuji-probe
+python3 /opt/yuji-probe/ops/install-command.py
 printf '\n  安装完成\n  ──────────────────────────────\n'
 python3 - <<'PYSHOW'
 import json
 d=json.load(open('/etc/yuji-probe/initial-admin.json'))
 print('  访问地址  '+d['url']+'\n  管理员    '+d['username']+'\n  初始密码  '+d['password'])
-print('\n  管理菜单  yuji-probe\n  反向代理  https://github.com/coexacx/yuji-probe-rust/blob/main/docs/反向代理.md')
-print('\n  自动 HTTPS：运行 sudo yuji-probe，选择 13。域名需已解析到本机。')
+print('\n  管理菜单  sudo YJ\n  反向代理  https://github.com/coexacx/YJmonitor/blob/main/docs/反向代理.md')
+print('\n  自动 HTTPS：运行 sudo YJ，选择 13。域名需已解析到本机。')
 print('\n  初始凭据保存在 /etc/yuji-probe/initial-admin.json（仅 root 可读）。')
 PYSHOW

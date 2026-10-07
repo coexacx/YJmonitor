@@ -1,3 +1,4 @@
+mod file_channel;
 use crate::{core::*, file_sessions, files, retained, ssh, tmux_stream};
 use axum::{
     body::Bytes,
@@ -229,12 +230,17 @@ async fn run(app: App, session: Session, pending: OwnedSemaphorePermit, mut ws: 
             && v.ticket.len() == 64
             && (v.transfer_session.is_empty() || file_sessions::valid(&v.transfer_session))
             && (v.shell_session.is_empty() || retained::valid(&v.shell_session))
-            && ["", "terminal", "inspect"].contains(&v.mode.as_str())
+            && ["", "terminal", "inspect", "files"].contains(&v.mode.as_str())
+            && (v.mode != "files" || (!v.transfer_session.is_empty() && v.shell_session.is_empty()))
             && (v.mode != "inspect"
                 || (v.transfer_session.is_empty() && v.shell_session.is_empty()))
     }) else {
         return;
     };
+    if first.mode == "files" {
+        file_channel::run(app, session, pending, ws, first).await;
+        return;
+    }
     let authorized = (|| -> ApiResult<_> {
         let mut i = app.lock();
         let ticket = i
@@ -382,7 +388,7 @@ async fn run(app: App, session: Session, pending: OwnedSemaphorePermit, mut ws: 
             let message = if fresh {
                 "无法创建可恢复终端，请重新部署 Agent 以安装 tmux"
             } else {
-                "原 SSH 会话已结束，请点击断开后新建连接"
+                "原 SSH 会话已结束，请关闭标签后新建连接"
             };
             let _ = ws
                 .send(WS::Text(
@@ -463,6 +469,8 @@ async fn run(app: App, session: Session, pending: OwnedSemaphorePermit, mut ws: 
     let (mut ws_write, mut ws_read) = ws.split();
     let (out, mut send_queue) = mpsc::channel::<WS>(8);
     let (control_out, mut control_queue) = mpsc::channel::<WS>(4);
+    let (file_out, mut file_queue) = mpsc::channel::<WS>(4);
+    let (inspection_out, mut inspection_queue) = mpsc::channel::<WS>(2);
     let credits = Arc::new(Semaphore::new(32));
     let probe = Arc::new(Mutex::new(Heartbeat::new(Instant::now())));
     let mut tasks = JoinSet::new();
@@ -506,7 +514,11 @@ async fn run(app: App, session: Session, pending: OwnedSemaphorePermit, mut ws: 
                     tokio::select! {
                         biased;
                         control = control_queue.recv() => control,
-                        data = send_queue.recv() => data,
+                        data = async { tokio::select! {
+                            data = send_queue.recv() => data,
+                            file = file_queue.recv() => file,
+                            inspection = inspection_queue.recv() => inspection,
+                        } } => data,
                     }
                 } => {
                     let Some(message) = message else { break };
@@ -529,13 +541,14 @@ async fn run(app: App, session: Session, pending: OwnedSemaphorePermit, mut ws: 
     }
     let _ = out
         .send(WS::Text(
-            json!({"type":"ready","files":!inspect_only,"terminal":!inspect_only,"inspection":true,"transferSession":files_session,"shellSession":shell_session,"restored":!fresh&&!inspect_only,"retentionSeconds":retained::RETENTION})
+            json!({"type":"ready","fileChannel":!inspect_only,"files":!inspect_only,"terminal":!inspect_only,"inspection":true,"transferSession":files_session,"shellSession":shell_session,"restored":!fresh&&!inspect_only,"retentionSeconds":retained::RETENTION})
                 .to_string()
                 .into(),
         ))
         .await;
     let (file_tx, file_rx) = mpsc::channel::<files::Request>(2);
     let (transfer_tx, transfer_rx) = mpsc::channel::<files::Request>(2);
+    let (inspection_tx, inspection_rx) = mpsc::channel::<files::Request>(2);
     let file_context = FileConnection {
         app: app.clone(),
         node: node.clone(),
@@ -543,10 +556,13 @@ async fn run(app: App, session: Session, pending: OwnedSemaphorePermit, mut ws: 
         link: link.clone(),
         session: files_session.clone(),
         check: check.clone(),
-        out: out.clone(),
+        out: file_out,
         stop: stop.clone(),
     };
+    let mut inspection_context = file_context.clone();
+    inspection_context.out = inspection_out;
     let mut file_tasks = vec![
+        tokio::spawn(file_worker(inspection_context, inspection_rx)),
         tokio::spawn(file_worker(file_context.clone(), file_rx)),
         tokio::spawn(file_worker(file_context, transfer_rx)),
     ];
@@ -759,7 +775,7 @@ async fn run(app: App, session: Session, pending: OwnedSemaphorePermit, mut ws: 
                             if !reject(&r, e) { break; }
                             continue;
                         }
-                        let tx = if files::is_transfer(&r) { &transfer_tx } else { &file_tx };
+                        let tx = if files::is_inspection(&r) { &inspection_tx } else if files::is_transfer(&r) { &transfer_tx } else { &file_tx };
                         match tx.try_send(r) {
                             Ok(_) => {}
                             Err(e) => {

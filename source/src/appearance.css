@@ -151,12 +151,20 @@ html:is([data-appearance=seasons]) .server-card:not(.is-offline) :is(.cpu-value:
 html[data-theme-package]:not([data-theme-package=""]){--terminal-surface:var(--glass-strong)}
 
 /* Moving landscapes use cached color/blur effects; translucent surfaces need no live backdrop passes. */
-html[data-appearance=seasons] :is(.glass,.server-card,dialog,.file-sidebar,#theme-preview-banner){backdrop-filter:none;-webkit-backdrop-filter:none}
-html[data-appearance=seasons] dialog::backdrop{backdrop-filter:none;-webkit-backdrop-filter:none}
+html[data-appearance=seasons] :is(.glass,.server-card,.file-sidebar,#theme-preview-banner){backdrop-filter:none;-webkit-backdrop-filter:none}
 html.has-package-background-color:not(.has-theme-background) .ambient{background:var(--bg)}
 
 /* Preserve glass at rest; moving content uses its translucent color layer.
    This avoids re-filtering the viewport on every scroll / hover frame. */
-html.theme-in-motion :is(.glass,.server-card,.node-dialog:not(#terminal-dialog),.toast){backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
-html.theme-in-motion .node-dialog::backdrop{backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
+html.theme-in-motion:not(:has(dialog[open])) :is(.glass,.server-card,.toast){backdrop-filter:none!important;-webkit-backdrop-filter:none!important}
 .season-scene,.season-weather{contain:layout paint style}
+
+/* The sixth administrator field completes the hardware grid without changing public details. */
+.detail-hardware-admin{grid-template-columns:repeat(2,minmax(0,1fr));align-items:start}
+.detail-hardware-admin>dl{min-width:0;align-self:stretch}
+.detail-hardware-admin>dl>dt{line-height:1.5;min-height:15px}
+.detail-hardware-admin>dl>dd{min-height:28px;line-height:1.65}
+.detail-hardware-admin .detail-inspector-link{margin-top:0;vertical-align:top}
+.telegram-settings-column{min-width:0}
+.telegram-group-form{margin-top:24px;padding-top:20px;border-top:1px solid var(--line)}
+.telegram-group-form h3{margin:0;font-size:14px;font-weight:600}

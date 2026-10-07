@@ -22,13 +22,19 @@ use tokio_tungstenite::{
 };
 use tokio_util::sync::CancellationToken;
 const IO_TIMEOUT: Duration = Duration::from_secs(5);
-type Outgoing = mpsc::Sender<WsMessage>;
+type Outgoing = crate::transport_queue::Sender<WsMessage>;
 async fn send(out: &Outgoing, msg: Message) -> Result<()> {
-    let raw = msg.encode()?;
-    timeout(IO_TIMEOUT, out.send(WsMessage::Text(raw.into())))
-        .await
-        .map_err(|_| "control queue stalled")?
-        .map_err(|_| "control queue closed")
+    let bulk = crate::transport_queue::bulk(&msg.kind);
+    let frame = WsMessage::Text(msg.encode()?.into());
+    if bulk {
+        timeout(IO_TIMEOUT, out.send_bulk(frame))
+            .await
+            .map_err(|_| "tunnel output stalled")?
+            .map_err(|_| "tunnel output closed")
+    } else {
+        out.try_control(frame)
+            .map_err(|_| "control queue unavailable")
+    }
 }
 struct Tunnel {
     generation: u64,
@@ -153,7 +159,8 @@ pub async fn connect(
     .map_err(|_| "control connection timed out")?
     .map_err(|_| "control connection unavailable")?;
     let (mut writer, mut reader) = ws.split();
-    let (out, mut outgoing) = mpsc::channel::<WsMessage>(32);
+    let (out, mut outgoing) =
+        crate::transport_queue::channel::<WsMessage>(crate::wire::MAX_TUNNELS * WINDOW + 16, 32);
     let mut tasks = JoinSet::new();
     tasks.spawn(async move {
         while let Some(msg) = outgoing.recv().await {
@@ -191,7 +198,7 @@ pub async fn connect(
             next=reader.next()=>{
                 let raw=match next{
                     Some(Ok(WsMessage::Text(raw)))=>raw,
-                    Some(Ok(WsMessage::Ping(raw)))=>{timeout(IO_TIMEOUT,out.send(WsMessage::Pong(raw))).await.map_err(|_|"control queue stalled")?.map_err(|_|"control queue closed")?;continue;},
+                    Some(Ok(WsMessage::Ping(raw)))=>{out.try_control(WsMessage::Pong(raw)).map_err(|_|"control queue unavailable")?;continue;},
                     Some(Ok(WsMessage::Pong(_)))=>continue,
                     _=>return Err("control channel closed"),
                 };

@@ -11,9 +11,8 @@ use sha2::{Digest, Sha256};
 use std::{net::SocketAddr, time::Duration};
 use tokio::time::timeout;
 use zeroize::Zeroizing;
-const RELEASE_ORIGIN: &str =
-    "https://github.com/coexacx/yuji-probe-rust/releases/download/v0.11.1/";
-pub const AGENT_VERSION: &str = "0.2.2";
+const RELEASE_ORIGIN: &str = "https://github.com/coexacx/YJmonitor/releases/download/v0.11.2/";
+pub const AGENT_VERSION: &str = "0.2.3";
 #[derive(Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 struct Inspect {
@@ -24,6 +23,7 @@ struct Inspect {
 #[serde(default, deny_unknown_fields)]
 struct TrustInput {
     inspection: String,
+    replace: bool,
 }
 #[derive(Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -64,23 +64,19 @@ pub async fn inspect(app: App, c: Context, body: Vec<u8>) -> ApiResult<ApiReply>
         .map_err(|_| ApiError::new(502, "无法获取 SSH 主机密钥，请检查 IP、端口和防火墙"))?;
     let raw = key.to_bytes().map_err(|_| ApiError::internal())?;
     let encoded = STANDARD.encode(&raw);
-    let fingerprint = format!("SHA256:{}", STANDARD_NO_PAD.encode(Sha256::digest(&raw)));
+    let fingerprint = host_fingerprint(&raw);
     let mut i = app.lock();
     let current = app.guard(&mut i, &c, true, true)?;
     if sid != current.id {
         return Err(ApiError::new(401, "登录已过期"));
     }
-    let pinned = i
-        .pins
-        .get(&address.to_string())
-        .cloned()
-        .unwrap_or_default();
-    if !pinned.is_empty() && pinned != encoded {
-        return Err(ApiError::new(
-            409,
-            "SSH 主机指纹发生变化，已阻止连接，请核实服务器身份",
-        ));
-    }
+    let pinned = i.pins.get(&address.to_string()).cloned();
+    let changed = pinned.as_ref().is_some_and(|old| old != &encoded);
+    let previous_fingerprint = pinned
+        .as_ref()
+        .map(|old| STANDARD.decode(old).map(|raw| host_fingerprint(&raw)))
+        .transpose()
+        .map_err(|_| ApiError::new(409, "保存的 SSH 指纹无效，请检查信任记录"))?;
     i.trust.retain(|_, v| v.expires >= now());
     if i.trust.len() >= 128 {
         return Err(ApiError::rate("请稍后重试", 60));
@@ -92,12 +88,16 @@ pub async fn inspect(app: App, c: Context, body: Vec<u8>) -> ApiResult<ApiReply>
             session_id: sid,
             address: address.to_string(),
             key: encoded.clone(),
+            previous_key: pinned.clone(),
             expires: now() + 300,
         },
     );
     Ok(ApiReply::ok(
-        json!({"trusted":pinned==encoded,"fingerprint":fingerprint,"inspection":id}),
+        json!({"trusted":pinned.as_ref()==Some(&encoded),"changed":changed,"address":address.to_string(),"fingerprint":fingerprint,"previousFingerprint":previous_fingerprint,"inspection":id}),
     ))
+}
+fn host_fingerprint(raw: &[u8]) -> String {
+    format!("SHA256:{}", STANDARD_NO_PAD.encode(Sha256::digest(raw)))
 }
 pub fn trust(app: &App, i: &mut Inner, c: &Context, body: &[u8]) -> ApiResult<ApiReply> {
     let x = app.guard(i, c, true, true)?;
@@ -108,18 +108,66 @@ pub fn trust(app: &App, i: &mut Inner, c: &Context, body: &[u8]) -> ApiResult<Ap
         .filter(|v| v.session_id == x.id && v.expires >= now())
         .cloned()
         .ok_or_else(|| ApiError::new(400, "主机检查已过期，请重新检查"))?;
-    i.trust.remove(&v.inspection);
-    if i.pins
-        .get(&found.address)
-        .is_some_and(|key| key != &found.key)
-    {
-        return Err(ApiError::new(409, "主机指纹不匹配"));
+    // The administrator confirms exactly the old/new pair from this session.
+    // A concurrent trust change invalidates the inspection, even if the new key matches.
+    if i.pins.get(&found.address) != found.previous_key.as_ref() {
+        i.trust.remove(&v.inspection);
+        return Err(ApiError::new(
+            409,
+            "SSH 信任记录已更新，请重新检查并核对指纹",
+        ));
     }
+    let changed = found
+        .previous_key
+        .as_ref()
+        .is_some_and(|old| old != &found.key);
+    if changed && !v.replace {
+        return Err(ApiError::new(
+            409,
+            "服务器 SSH 指纹已变更，请核对新旧指纹并明确确认更新",
+        ));
+    }
+    if changed
+        && i.jobs.values().any(|job| {
+            job.state == "running"
+                && i.data.nodes.iter().any(|node| {
+                    node.public.id == job.node_id
+                        && address(node).is_ok_and(|value| value.to_string() == found.address)
+                })
+        })
+    {
+        return Err(ApiError::new(409, "此服务器正在部署，请等待完成后重新检查"));
+    }
+    let subject = if changed {
+        let old = STANDARD
+            .decode(found.previous_key.as_deref().unwrap_or_default())
+            .map_err(|_| ApiError::internal())?;
+        let new = STANDARD
+            .decode(&found.key)
+            .map_err(|_| ApiError::internal())?;
+        format!(
+            "{} · {} → {}",
+            found.address,
+            host_fingerprint(&old),
+            host_fingerprint(&new)
+        )
+    } else {
+        found.address.clone()
+    };
     let mut pins = i.pins.clone();
-    pins.insert(found.address.clone(), found.key);
+    pins.insert(found.address.clone(), found.key.clone());
     atomic_json(&app.0.dir.join("ssh-pins.json"), &pins).map_err(|_| ApiError::internal())?;
     i.pins = pins;
-    app.record(i, "ssh_host_trusted", &found.address);
+    i.trust.remove(&v.inspection);
+    app.record(
+        i,
+        if changed {
+            "ssh_host_replaced"
+        } else {
+            "ssh_host_trusted"
+        },
+        &subject,
+    );
     Ok(ApiReply::ok(json!({"ok":true})))
 }
 pub fn ensure_secret(app: &App, i: &mut Inner, id: &str) -> ApiResult<NodeSecret> {
@@ -278,7 +326,7 @@ fn allowed_release_url(url: &reqwest::Url) -> bool {
     match url.host_str() {
         Some("github.com") => {
             url.path()
-                .starts_with("/coexacx/yuji-probe-rust/releases/download/v0.11.1/")
+                .starts_with("/coexacx/YJmonitor/releases/download/v0.11.2/")
                 && url.query().is_none()
         }
         Some("release-assets.githubusercontent.com") => {
@@ -568,10 +616,248 @@ async fn run(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct Fixture {
+        app: App,
+        context: Context,
+        inspection: String,
+        old: String,
+        new: String,
+    }
+    impl Fixture {
+        fn new() -> Self {
+            let dir = std::env::temp_dir().join(format!("probe-host-trust-{}", token()));
+            std::fs::create_dir(&dir).unwrap();
+            atomic_json(
+                &dir.join("auth.json"),
+                &Auth {
+                    version: token(),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            atomic_json(
+                &dir.join("nodes.json"),
+                &Data {
+                    schema: 2,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            let app = App::new(dir, "https://trust.test".into(), false).unwrap();
+            let session = app.lock().new_session("", true).unwrap();
+            let mut headers = axum::http::HeaderMap::new();
+            headers.insert(
+                "Cookie",
+                format!("{COOKIE}={}", session.id).parse().unwrap(),
+            );
+            headers.insert("Origin", "https://trust.test".parse().unwrap());
+            headers.insert("X-CSRF-Token", session.csrf.parse().unwrap());
+            let context = Context::new(
+                "POST",
+                "/api/admin/trust-ssh",
+                headers,
+                "127.0.0.1:9999".parse().unwrap(),
+                &app.0.origin,
+            );
+            let inspection = token();
+            let old = STANDARD.encode(b"old observed host key");
+            let new = STANDARD.encode(b"new observed host key");
+            {
+                let mut i = app.lock();
+                i.pins.insert("192.0.2.1:22".into(), old.clone());
+                i.pins.insert("192.0.2.1:2222".into(), old.clone());
+                i.trust.insert(
+                    inspection.clone(),
+                    Trust {
+                        session_id: session.id,
+                        address: "192.0.2.1:22".into(),
+                        key: new.clone(),
+                        previous_key: Some(old.clone()),
+                        expires: now() + 300,
+                    },
+                );
+                atomic_json(&app.0.dir.join("ssh-pins.json"), &i.pins).unwrap();
+            }
+            Self {
+                app,
+                context,
+                inspection,
+                old,
+                new,
+            }
+        }
+        fn confirm(&self, replace: bool) -> ApiResult<ApiReply> {
+            trust(
+                &self.app,
+                &mut self.app.lock(),
+                &self.context,
+                &serde_json::to_vec(&json!({"inspection":self.inspection,"replace":replace}))
+                    .unwrap(),
+            )
+        }
+        fn stored(&self) -> std::collections::HashMap<String, String> {
+            read_json(&self.app.0.dir.join("ssh-pins.json")).unwrap()
+        }
+    }
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.app.0.dir);
+        }
+    }
+    #[test]
+    fn changed_key_requires_explicit_confirmation_and_is_one_use() {
+        let f = Fixture::new();
+        assert_eq!(f.confirm(false).err().unwrap().status, 409);
+        assert_eq!(f.stored()["192.0.2.1:22"], f.old);
+        assert!(f.confirm(true).is_ok());
+        assert_eq!(f.stored()["192.0.2.1:22"], f.new);
+        assert_eq!(f.stored()["192.0.2.1:2222"], f.old);
+        assert_eq!(f.confirm(true).err().unwrap().status, 400);
+        let i = f.app.lock();
+        assert_eq!(i.audit.last().unwrap().action, "ssh_host_replaced");
+        assert!(
+            i.audit
+                .last()
+                .unwrap()
+                .subject
+                .contains(&host_fingerprint(b"old observed host key"))
+        );
+        assert!(
+            i.audit
+                .last()
+                .unwrap()
+                .subject
+                .contains(&host_fingerprint(b"new observed host key"))
+        );
+    }
+    #[test]
+    fn first_connection_and_unchanged_key_keep_original_flow() {
+        for first in [true, false] {
+            let f = Fixture::new();
+            let mut i = f.app.lock();
+            if first {
+                i.pins.remove("192.0.2.1:22");
+                i.trust.get_mut(&f.inspection).unwrap().previous_key = None;
+            } else {
+                i.trust.get_mut(&f.inspection).unwrap().key = f.old.clone();
+            }
+            drop(i);
+            assert!(f.confirm(false).is_ok());
+            assert_eq!(
+                f.app.lock().audit.last().unwrap().action,
+                "ssh_host_trusted"
+            );
+        }
+    }
+    #[test]
+    fn concurrent_trust_change_invalidates_old_confirmation() {
+        for concurrent in [
+            STANDARD.encode(b"third key"),
+            STANDARD.encode(b"new observed host key"),
+        ] {
+            let f = Fixture::new();
+            f.app
+                .lock()
+                .pins
+                .insert("192.0.2.1:22".into(), concurrent.clone());
+            assert_eq!(f.confirm(true).err().unwrap().status, 409);
+            assert_eq!(f.app.lock().pins["192.0.2.1:22"], concurrent);
+        }
+    }
+    #[test]
+    fn inspection_is_bound_to_login_and_expiry() {
+        let f = Fixture::new();
+        f.app
+            .lock()
+            .trust
+            .get_mut(&f.inspection)
+            .unwrap()
+            .session_id = token();
+        assert_eq!(f.confirm(true).err().unwrap().status, 400);
+        let mut i = f.app.lock();
+        let found = i.trust.get_mut(&f.inspection).unwrap();
+        found.session_id = f.context.sid.clone();
+        found.expires = now() - 1;
+        drop(i);
+        assert_eq!(f.confirm(true).err().unwrap().status, 400);
+        assert_eq!(f.stored()["192.0.2.1:22"], f.old);
+    }
+    #[test]
+    fn host_rotation_requires_admin_and_csrf() {
+        let mut f = Fixture::new();
+        f.context.headers.remove("X-CSRF-Token");
+        assert_eq!(f.confirm(true).err().unwrap().status, 403);
+        f.app.lock().sessions.get_mut(&f.context.sid).unwrap().auth = false;
+        assert_eq!(f.confirm(true).err().unwrap().status, 401);
+        assert_eq!(f.stored()["192.0.2.1:22"], f.old);
+    }
+    #[test]
+    fn failed_persistence_does_not_replace_in_memory_key() {
+        let f = Fixture::new();
+        let path = f.app.0.dir.join("ssh-pins.json");
+        std::fs::remove_file(&path).unwrap();
+        std::fs::create_dir(&path).unwrap();
+        assert_eq!(f.confirm(true).err().unwrap().status, 500);
+        let i = f.app.lock();
+        assert_eq!(i.pins["192.0.2.1:22"], f.old);
+        assert!(i.trust.contains_key(&f.inspection));
+        assert!(i.audit.is_empty());
+    }
+    #[test]
+    fn active_deployment_prevents_rotation() {
+        let f = Fixture::new();
+        let mut i = f.app.lock();
+        i.data.nodes.push(Node {
+            ip: "192.0.2.1".into(),
+            port: 22,
+            public: PublicNode {
+                id: "node".into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        i.jobs.insert(
+            "job".into(),
+            DeployJob {
+                id: "job".into(),
+                node_id: "node".into(),
+                state: "running".into(),
+                message: String::new(),
+                started: now(),
+            },
+        );
+        drop(i);
+        assert_eq!(f.confirm(true).err().unwrap().status, 409);
+        assert_eq!(f.stored()["192.0.2.1:22"], f.old);
+    }
+    #[test]
+    fn confirmation_cannot_supply_its_own_key_or_target() {
+        for extra in [json!({"key":"injected"}), json!({"address":"192.0.2.3:22"})] {
+            let f = Fixture::new();
+            let mut body = json!({"inspection":f.inspection,"replace":true});
+            body.as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            assert_eq!(
+                trust(
+                    &f.app,
+                    &mut f.app.lock(),
+                    &f.context,
+                    &serde_json::to_vec(&body).unwrap()
+                )
+                .err()
+                .unwrap()
+                .status,
+                400
+            );
+            assert_eq!(f.stored()["192.0.2.1:22"], f.old);
+        }
+    }
     #[test]
     fn release_redirect_boundaries() {
         for url in [
-            "https://github.com/coexacx/yuji-probe-rust/releases/download/v0.11.1/stable.json",
+            "https://github.com/coexacx/YJmonitor/releases/download/v0.11.2/stable.json",
             "https://release-assets.githubusercontent.com/github-production-release-asset/1/abc?sig=example",
             "https://objects.githubusercontent.com/github-production-release-asset-2e65be/1/abc",
         ] {
@@ -581,15 +867,15 @@ mod tests {
             );
         }
         for url in [
-            "http://github.com/coexacx/yuji-probe-rust/releases/download/v0.11.1/stable.json",
-            "https://github.com:444/coexacx/yuji-probe-rust/releases/download/v0.11.1/stable.json",
-            "https://user:password@github.com/coexacx/yuji-probe-rust/releases/download/v0.11.1/stable.json",
-            "https://github.com/coexacx/other/releases/download/v0.11.1/stable.json",
-            "https://github.com/coexacx/yuji-probe/releases/download/v0.11.1/stable.json",
-            "https://github.com/coexacx/yuji-probe-rust/releases/download/rust-v0.11.0/stable.json",
-            "https://github.com/coexacx/yuji-probe-rust/releases/download/v0.11.1/../../../login",
-            "https://github.com/coexacx/yuji-probe-rust/releases/download/v0.11.1/stable.json#fragment",
-            "https://github.com/coexacx/yuji-probe-rust/releases/download/v0.11.1/stable.json?redirect=1",
+            "http://github.com/coexacx/YJmonitor/releases/download/v0.11.2/stable.json",
+            "https://github.com:444/coexacx/YJmonitor/releases/download/v0.11.2/stable.json",
+            "https://user:password@github.com/coexacx/YJmonitor/releases/download/v0.11.2/stable.json",
+            "https://github.com/coexacx/other/releases/download/v0.11.2/stable.json",
+            "https://github.com/coexacx/yuji-probe/releases/download/v0.11.2/stable.json",
+            "https://github.com/coexacx/YJmonitor/releases/download/rust-v0.11.0/stable.json",
+            "https://github.com/coexacx/YJmonitor/releases/download/v0.11.2/../../../login",
+            "https://github.com/coexacx/YJmonitor/releases/download/v0.11.2/stable.json#fragment",
+            "https://github.com/coexacx/YJmonitor/releases/download/v0.11.2/stable.json?redirect=1",
             "https://release-assets.githubusercontent.com.evil.example/github-production-release-asset/1",
             "https://release-assets.githubusercontent.com/elsewhere/1",
             "https://127.0.0.1/github-production-release-asset/1",

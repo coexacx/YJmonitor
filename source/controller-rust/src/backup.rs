@@ -458,6 +458,8 @@ fn restore(app: &App, i: &mut Inner, mut b: Bundle) -> ApiResult<bool> {
     }
     b.auth.version = token();
     b.telegram.queue.clear();
+    b.telegram.test = TelegramTestResult::default();
+    b.telegram.group.test = TelegramTestResult::default();
     b.operations.busy = false;
     let mut files = HashMap::new();
     for (name, value) in [
@@ -637,7 +639,7 @@ pub async fn check_release(app: &App) -> ApiResult<ApiReply> {
         Duration::from_secs(10),
         app.0
             .http
-            .get("https://api.github.com/repos/coexacx/yuji-probe-rust/releases/latest")
+            .get("https://api.github.com/repos/coexacx/YJmonitor/releases/latest")
             .send(),
     )
     .await
@@ -669,7 +671,7 @@ pub async fn check_release(app: &App) -> ApiResult<ApiReply> {
         return Err(ApiError::new(502, "发布版本格式不正确"));
     }
     Ok(ApiReply::ok(
-        json!({"current":VERSION,"latest":version,"url":format!("https://github.com/coexacx/yuji-probe-rust/releases/tag/{tag}"),"available":newer_release(version,VERSION)}),
+        json!({"current":VERSION,"latest":version,"url":format!("https://github.com/coexacx/YJmonitor/releases/tag/{tag}"),"available":newer_release(version,VERSION)}),
     ))
 }
 #[cfg(test)]

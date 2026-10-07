@@ -9,7 +9,7 @@ if [[ -t 1 && ${TERM:-dumb} != dumb && -z ${NO_COLOR:-} ]]; then
  yuji_color=$'\033[36m';yuji_dim=$'\033[2m';yuji_reset=$'\033[0m'
 fi
 if (( $# )); then exec python3 "$YUJI_OPS" "$@";fi
-(( EUID == 0 )) || { printf '请使用 sudo yuji-probe。\n';exit 1;}
+(( EUID == 0 )) || { printf '请使用 sudo YJ。\n';exit 1;}
 while true; do
  printf '\n  %s羽迹探针%s  /  管理\n' "$yuji_color" "$yuji_reset"
  printf '  %s──────────────────────────────%s\n' "$yuji_dim" "$yuji_reset"
@@ -33,7 +33,7 @@ while true; do
   7) python3 "$YUJI_OPS" address || true;;
   8) python3 "$YUJI_OPS" backup || true;;
   9) python3 "$YUJI_OPS" reset-mfa || true;;
-  10) printf '\n  https://github.com/coexacx/yuji-probe-rust/blob/main/docs/反向代理.md\n';;
+  10) printf '\n  https://github.com/coexacx/YJmonitor/blob/main/docs/反向代理.md\n';;
   11) python3 "$YUJI_OPS" rollback || true;;
   12) python3 "$YUJI_OPS" uninstall || true; [[ -f "$YUJI_OPS" ]] || exit 0;;
   13) python3 "$YUJI_OPS" https || true;;

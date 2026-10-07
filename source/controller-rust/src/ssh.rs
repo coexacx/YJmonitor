@@ -325,3 +325,69 @@ pub async fn recovery_client(
     }
     Ok(Arc::new(client))
 }
+
+#[cfg(test)]
+mod host_key_tests {
+    use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    struct PasswordObserver(Arc<AtomicUsize>);
+    impl russh::server::Handler for PasswordObserver {
+        type Error = russh::Error;
+        async fn auth_password(
+            &mut self,
+            _: &str,
+            _: &str,
+        ) -> Result<russh::server::Auth, Self::Error> {
+            self.0.fetch_add(1, Ordering::SeqCst);
+            Ok(russh::server::Auth::Accept)
+        }
+    }
+    #[tokio::test]
+    async fn changed_host_cannot_receive_password_until_exact_key_is_pinned() {
+        timeout(Duration::from_secs(8), async {
+            let (raw, _) = create_key("rotated-host-fixture").unwrap();
+            let host = PrivateKey::from_openssh(raw.as_slice()).unwrap();
+            let new_pin = STANDARD.encode(host.public_key().to_bytes().unwrap());
+            let (raw, _) = create_key("old-host-fixture").unwrap();
+            let old = PrivateKey::from_openssh(raw.as_slice()).unwrap();
+            let old_pin = STANDARD.encode(old.public_key().to_bytes().unwrap());
+            for pin in [None, Some(old_pin.as_str()), Some(new_pin.as_str())] {
+                let attempts = Arc::new(AtomicUsize::new(0));
+                let observer = PasswordObserver(attempts.clone());
+                let (local, remote) = tokio::io::duplex(65536);
+                let config = Arc::new(russh::server::Config {
+                    keys: vec![host.clone()],
+                    ..Default::default()
+                });
+                let server = tokio::spawn(async move {
+                    if let Ok(s) = russh::server::run_stream(config, remote, observer).await {
+                        let _ = s.await;
+                    }
+                });
+                let inspected = Arc::new(Mutex::new(None));
+                let result = connect(local, pin, inspected.clone()).await;
+                assert_eq!(
+                    inspected.lock().unwrap().as_ref().unwrap().key_data(),
+                    host.public_key().key_data()
+                );
+                if pin == Some(new_pin.as_str()) {
+                    let mut client = result.unwrap();
+                    assert!(
+                        client
+                            .authenticate_password("fixture", "not-a-real-password")
+                            .await
+                            .unwrap()
+                            .success()
+                    );
+                    assert_eq!(attempts.load(Ordering::SeqCst), 1);
+                } else {
+                    assert!(result.is_err());
+                    assert_eq!(attempts.load(Ordering::SeqCst), 0);
+                }
+                server.abort();
+            }
+        })
+        .await
+        .unwrap();
+    }
+}

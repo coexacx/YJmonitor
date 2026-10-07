@@ -16,6 +16,10 @@ pub struct TransferSession {
     pub closing: bool,
     #[serde(skip)]
     pub attached: bool,
+    #[serde(skip)]
+    pub channel_id: String,
+    #[serde(skip)]
+    pub channel_stop: Option<tokio_util::sync::CancellationToken>,
 }
 pub fn load(dir: &std::path::Path) -> Result<HashMap<String, TransferSession>, &'static str> {
     match read_json::<HashMap<String, TransferSession>>(&dir.join("file-sessions.json")) {
@@ -87,6 +91,8 @@ pub fn reserve(
             created: now(),
             closing: false,
             attached: true,
+            channel_id: String::new(),
+            channel_stop: None,
         },
     );
     save(app, i)?;
@@ -96,6 +102,10 @@ pub fn detached(app: &App, id: &str) {
     let mut i = app.lock();
     if let Some(r) = i.file_sessions.get_mut(id) {
         r.attached = false;
+        if let Some(stop) = r.channel_stop.take() {
+            stop.cancel();
+        }
+        r.channel_id.clear();
         r.touched = now();
     }
     let _ = save(app, &i);
@@ -104,8 +114,60 @@ pub fn ending(app: &App, id: &str) {
     let mut i = app.lock();
     if let Some(r) = i.file_sessions.get_mut(id) {
         r.closing = true;
+        if let Some(stop) = r.channel_stop.take() {
+            stop.cancel();
+        }
+        r.channel_id.clear();
     }
     let _ = save(app, &i);
+}
+pub fn attach_channel(
+    i: &mut Inner,
+    session: &Session,
+    node: &str,
+    lease: &str,
+    id: &str,
+    stop: tokio_util::sync::CancellationToken,
+) -> ApiResult<()> {
+    let r = i
+        .file_sessions
+        .get_mut(lease)
+        .filter(|r| {
+            r.attached
+                && !r.closing
+                && r.owner == session.handle
+                && r.version == session.version
+                && r.node == node
+        })
+        .ok_or_else(|| ApiError::new(403, "文件通道必须属于当前已连接的终端"))?;
+    if !r.channel_id.is_empty() {
+        return Err(ApiError::new(409, "文件通道仍在关闭，请稍后重试"));
+    }
+    r.channel_id = id.into();
+    r.channel_stop = Some(stop);
+    Ok(())
+}
+pub fn channel_valid(i: &Inner, session: &Session, node: &str, lease: &str, id: &str) -> bool {
+    i.file_sessions.get(lease).is_some_and(|r| {
+        r.attached
+            && !r.closing
+            && r.owner == session.handle
+            && r.version == session.version
+            && r.node == node
+            && r.channel_id == id
+            && !id.is_empty()
+    })
+}
+pub fn release_channel(app: &App, lease: &str, id: &str) {
+    let mut i = app.lock();
+    if let Some(r) = i.file_sessions.get_mut(lease)
+        && r.channel_id == id
+    {
+        if let Some(stop) = r.channel_stop.take() {
+            stop.cancel();
+        }
+        r.channel_id.clear();
+    }
 }
 pub async fn cleanup_one(app: &App, id: &str) -> bool {
     if !crate::files::transfer::has_session(app, id) {
@@ -210,5 +272,81 @@ mod tests {
         for s in ["../x", "$(id)", "a;id", ""] {
             assert!(!valid(s));
         }
+    }
+}
+
+#[cfg(test)]
+mod channel_tests {
+    use super::*;
+    use crate::model::Auth;
+    use tokio_util::sync::CancellationToken;
+    #[tokio::test]
+    async fn companion_requires_attached_owner_and_cannot_detach_parent() {
+        let dir = std::env::temp_dir().join(format!("probe-file-channel-{}", token()));
+        std::fs::create_dir(&dir).unwrap();
+        atomic_json(&dir.join("auth.json"), &Auth::default()).unwrap();
+        atomic_json(
+            &dir.join("nodes.json"),
+            &crate::model::Data {
+                schema: 2,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let app = App::new(dir.clone(), "https://example.invalid".into(), true).unwrap();
+        let (session, lease) = {
+            let mut i = app.lock();
+            let s = i.new_session("", true).unwrap();
+            let lease = reserve(&app, &mut i, &s, "node", "").unwrap();
+            (s, lease)
+        };
+        let stop = CancellationToken::new();
+        {
+            let mut i = app.lock();
+            let mut wrong = session.clone();
+            wrong.handle = token();
+            assert!(attach_channel(&mut i, &wrong, "node", &lease, "bad", stop.clone()).is_err());
+            wrong = session.clone();
+            wrong.version = token();
+            assert!(attach_channel(&mut i, &wrong, "node", &lease, "bad", stop.clone()).is_err());
+            assert!(
+                attach_channel(&mut i, &session, "other", &lease, "bad", stop.clone()).is_err()
+            );
+            attach_channel(&mut i, &session, "node", &lease, "one", stop.clone()).unwrap();
+            assert!(attach_channel(&mut i, &session, "node", &lease, "two", stop.clone()).is_err());
+            assert!(channel_valid(&i, &session, "node", &lease, "one"));
+        }
+        release_channel(&app, &lease, "old");
+        assert!(!stop.is_cancelled());
+        release_channel(&app, &lease, "one");
+        assert!(stop.is_cancelled());
+        assert!(app.lock().file_sessions[&lease].attached);
+        let next = CancellationToken::new();
+        attach_channel(
+            &mut app.lock(),
+            &session,
+            "node",
+            &lease,
+            "two",
+            next.clone(),
+        )
+        .unwrap();
+        release_channel(&app, &lease, "one");
+        assert!(!next.is_cancelled());
+        detached(&app, &lease);
+        assert!(next.is_cancelled());
+        assert!(
+            attach_channel(
+                &mut app.lock(),
+                &session,
+                "node",
+                &lease,
+                "three",
+                CancellationToken::new()
+            )
+            .is_err()
+        );
+        drop(app);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }

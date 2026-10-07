@@ -1,6 +1,6 @@
 # Linux 一键部署与维护
 
-本页适用于羽迹探针 Rust 独立版 0.11.1。安装器下载预编译发行包，不在用户服务器上编译 Rust，不需要数据库或 PHP。
+本页适用于羽迹探针 Rust 独立版 0.11.2。安装器下载预编译发行包，不在用户服务器上编译 Rust，不需要数据库或 PHP。
 
 ## 安装
 
@@ -8,12 +8,12 @@
 
 ~~~sh
 curl -fL --proto '=https' --proto-redir '=https' --tlsv1.2 \
-  https://raw.githubusercontent.com/coexacx/yuji-probe-rust/v0.11.1/install.sh \
+  https://raw.githubusercontent.com/coexacx/YJmonitor/v0.11.2/install.sh \
   -o /root/yuji-install.sh
 bash /root/yuji-install.sh
 ~~~
 
-只需填写站点名称。脚本安装运行依赖、验证发行签名、创建独立服务账户和随机管理员密码，结束后显示 IP:端口、管理员和初始密码。
+只需填写站点名称。脚本安装运行依赖、验证发行签名、自动创建独立服务账户、0700 私有数据目录、必要权限和随机管理员密码，结束后显示 IP:端口、管理员和初始密码。
 
 默认端口 19281。需要其他端口可运行 bash /root/yuji-install.sh --port 29281。运行 --check 仅检查系统与架构，不安装。需要自动化时可用 --site-name '站点名称'。
 
@@ -80,3 +80,7 @@ bash install.sh --release-dir /root/yuji-release --site-name '羽迹探针'
 ~~~
 
 离线包也必须通过 Ed25519 签名、大小、SHA-256 和解压路径校验。运行依赖仍需提前安装或由系统包管理器获取。
+
+## 旧仓库迁移
+
+仓库已更名为 coexacx/YJmonitor。旧版更新器严格固定原仓库地址，已有安装先按 [仓库更名迁移说明](仓库更名-0.11.2.md) 运行一次迁移脚本。签名公钥、私有状态和节点凭据保持兼容。一键安装实例会同时安装 sudo YJ 入口，旧 yuji-probe 命令作为兼容别名保留。

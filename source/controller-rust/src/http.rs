@@ -132,6 +132,12 @@ async fn api(
         if c.path == "/api/login" && c.method == "POST" {
             return auth::login(app.clone(), c, bytes).await;
         }
+        if c.path.starts_with("/api/admin/telegram/group") {
+            return telegram::group_api(app.clone(), c, bytes).await;
+        }
+        if c.path == "/api/admin/username" && c.method == "POST" {
+            return auth::change_username(app.clone(), c, bytes).await;
+        }
         if c.path == "/api/admin/password" && c.method == "POST" {
             return auth::password(app.clone(), c, bytes).await;
         }
