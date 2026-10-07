@@ -5,7 +5,7 @@ export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 umask 077
 exec python3 - "$@" <<'PY'
 import argparse,fcntl,importlib.util,json,os,pathlib,re,stat,subprocess,sys,time
-VERSION="0.11.2"
+VERSION="0.11.3"
 REPOSITORY="coexacx/YJmonitor"
 PUBLIC="o8+DdHbo82V7fxJEIiEhe5AK/frR91Fz5vjf/pDAnts="
 def trusted(path,directory=False):

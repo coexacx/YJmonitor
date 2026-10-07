@@ -33,7 +33,7 @@ node build.mjs
 
 ## Agent 发布源
 
-主控从 https://github.com/coexacx/YJmonitor/releases/download/v0.11.2/ 获取 `stable.json`，先用内嵌 Ed25519 公钥验证签名，再验证精确版本、架构、文件名、长度与 SHA-256。校验失败会终止部署，不执行远端二进制。
+主控从 https://github.com/coexacx/YJmonitor/releases/download/v0.11.3/ 获取 `stable.json`，先用内嵌 Ed25519 公钥验证签名，再验证精确版本、架构、文件名、长度与 SHA-256。校验失败会终止部署，不执行远端二进制。
 
 发布下载仅允许固定仓库 HTTPS 与 GitHub 资产 CDN，最多跟随 4 次重定向。其他 HTTP 客户端仍不跟随重定向。
 
@@ -43,4 +43,4 @@ node build.mjs
 
     node --test source/tests/seasons.test.mjs
 
-本仓库使用 ops/package-release.py 生成唯一的 Rust 发行包，默认 --variant rust。签名私钥必须放在源码树之外。正式标签为 v0.11.2，在 coexacx/YJmonitor 中发布为 latest；不操作原 PHP 仓库的 latest。
+本仓库使用 ops/package-release.py 生成唯一的 Rust 发行包，默认 --variant rust。签名私钥必须放在源码树之外。正式标签为 v0.11.3，在 coexacx/YJmonitor 中发布为 latest；不操作原 PHP 仓库的 latest。

@@ -9,7 +9,7 @@ Nginx + Rust 单二进制服务器探针。页面、网页安装向导、API 与
 ## 功能
 
 - 公开看板：全球国家与国旗、CPU、内存、已启用 Swap、磁盘、网卡实时速率和累计上下行。
-- 管理后台：自动部署 Agent、供应商与到期日、续费周期与支出汇总、聚合续费提醒、个人与群组 Telegram 通知、常用命令。
+- 管理后台：服务器按全部 / 在线 / 离线筛选，实时显示数量；自动部署 Agent、供应商与到期日、续费周期与支出汇总、聚合续费提醒、个人与群组 Telegram 通知、常用命令。
 - 浏览器 SSH / SFTP：手机快捷键与粘贴、多标签、目录浏览、新建文件与目录、上传下载队列、分块续传、UTF-8 编辑和冲突检查。
 - 浏览器文件传输使用独立 WSS，文件连接异常可单独重试；终端、文件浏览、传输、资源查询使用独立 SSH 连接；保活与重新协商分别计时。异常断线五分钟内可恢复原 Shell，只允许原登录恢复；主动断开、关闭或退出登录会结束会话，不自动重发命令。
 - 管理员用户名修改、二步验证、一次性恢复码、设备撤销、加密备份、S3 / WebDAV 异地保存与跨域名迁移。
@@ -19,7 +19,7 @@ Nginx + Rust 单二进制服务器探针。页面、网页安装向导、API 与
 ## 一键安装与管理
 
 ~~~sh
-curl -fL --proto '=https' --proto-redir '=https' --tlsv1.2 https://raw.githubusercontent.com/coexacx/YJmonitor/v0.11.2/install.sh -o /root/yuji-install.sh
+curl -fL --proto '=https' --proto-redir '=https' --tlsv1.2 https://raw.githubusercontent.com/coexacx/YJmonitor/v0.11.3/install.sh -o /root/yuji-install.sh
 bash /root/yuji-install.sh
 ~~~
 
@@ -37,7 +37,7 @@ bash /root/yuji-install.sh
 
 ## 发行内容
 
-主控 0.11.2，Agent 0.2.3。[本版功能与验收记录](docs/验收-0.11.2.md)。[自动 HTTPS 验收记录](docs/验收-0.11.1.md)。[新版终端工作区](docs/终端工作区-0.11.0.md)。[终端滚动与输出记录说明](docs/终端回滚记录-0.10.2.md)。完整包为 **yuji-probe-rust-0.11.2.zip**，包含 amd64 / arm64 预编译主控与完整源码；Agent 二进制、签名清单及安装脚本在同一 Release。GitHub 自动生成的 Source code 包不含主控二进制。
+主控 0.11.3，Agent 0.2.3。[本版功能与验收记录](docs/验收-0.11.3.md)。[自动 HTTPS 验收记录](docs/验收-0.11.1.md)。[新版终端工作区](docs/终端工作区-0.11.0.md)。[终端滚动与输出记录说明](docs/终端回滚记录-0.10.2.md)。完整包为 **yuji-probe-rust-0.11.3.zip**，包含 amd64 / arm64 预编译主控与完整源码；Agent 二进制、签名清单及安装脚本在同一 Release。GitHub 自动生成的 Source code 包不含主控二进制。
 
 更新只检查本仓库 v* 正式发行版。下载核对 Ed25519 签名、版本、架构、长度与 SHA-256，失败即停止。普通用户不需要 GitHub Token 或编译环境。
 

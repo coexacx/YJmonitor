@@ -1,4 +1,4 @@
-# Nginx + Rust 部署教程（0.11.2）
+# Nginx + Rust 部署教程（0.11.3）
 
 本发行版将页面、静态资源、网页安装向导、API、WSS 和业务主控放在一个 Rust 可执行文件里。运行时使用 Nginx 与一个主控进程，不启动 PHP-FPM，不需要数据库、Node.js 或 Rust 编译环境。源码包同时附带 amd64、arm64 二进制，实际只运行对应架构的一个。
 
@@ -26,17 +26,17 @@
 
 ### 2. 下载完整发行包
 
-到 [v0.11.2 Release](https://github.com/coexacx/YJmonitor/releases/tag/v0.11.2) 下载 `yuji-probe-rust-0.11.2.zip` 及同名 `.sha256` 文件。不要下载 GitHub 自动生成的 Source code 包：它没有预编译二进制。
+到 [v0.11.3 Release](https://github.com/coexacx/YJmonitor/releases/tag/v0.11.3) 下载 `yuji-probe-rust-0.11.3.zip` 及同名 `.sha256` 文件。不要下载 GitHub 自动生成的 Source code 包：它没有预编译二进制。
 
 ```sh
 install -d -m 700 /root/yuji-rust-install
 cd /root/yuji-rust-install
-curl -fLO --proto '=https' --proto-redir '=https' https://github.com/coexacx/YJmonitor/releases/download/v0.11.2/yuji-probe-rust-0.11.2.zip
-curl -fLO --proto '=https' --proto-redir '=https' https://github.com/coexacx/YJmonitor/releases/download/v0.11.2/yuji-probe-rust-0.11.2.zip.sha256
-sha256sum -c yuji-probe-rust-0.11.2.zip.sha256
-unzip yuji-probe-rust-0.11.2.zip
+curl -fLO --proto '=https' --proto-redir '=https' https://github.com/coexacx/YJmonitor/releases/download/v0.11.3/yuji-probe-rust-0.11.3.zip
+curl -fLO --proto '=https' --proto-redir '=https' https://github.com/coexacx/YJmonitor/releases/download/v0.11.3/yuji-probe-rust-0.11.3.zip.sha256
+sha256sum -c yuji-probe-rust-0.11.3.zip.sha256
+unzip yuji-probe-rust-0.11.3.zip
 test ! -e /opt/yuji-probe-rust
-mv yuji-probe-rust-0.11.2 /opt/yuji-probe-rust
+mv yuji-probe-rust-0.11.3 /opt/yuji-probe-rust
 ```
 
 校验和用于核对下载内容；完整的签名校验由一键安装器和后台升级器执行。手动部署只从本仓库受信任的 Release 获取包和校验文件。
@@ -220,4 +220,4 @@ Agent 需更新到 0.2.2，安装/更新时会准备 tmux。SSH 终端、目录�
 
 ## 五、从原仓库的 rust-v0.10.0 切换
 
-已有 Rust 安装保留原域名、服务名、服务用户、端口和完整私有状态。下载本仓库发行包，仅替换程序，重新注册本仓库的更新服务。不要运行全新安装器覆盖原配置。具体操作和兼容边界见 [仓库迁移说明](仓库迁移-0.10.3.md)。
+已有 Rust 安装保留原域名、服务名、服务用户、端口和完整私有状态。下载本仓库发行包，仅替换程序，重新注册本仓库的更新服务。不要运行全新安装器覆盖原配置。具体操作和兼容边界见 [仓库迁移说明](仓库迁移-0.10.1.md)。
