@@ -29,6 +29,10 @@ class ServiceSetup(unittest.TestCase):
   with patch.object(prepare.pwd,"getpwnam",side_effect=[KeyError(),self.account]),patch.object(prepare.subprocess,"run") as run:
    self.run_prepare()
    self.assertEqual(run.call_args.args[0],["/usr/sbin/useradd","--system","--user-group","--home-dir",str(self.data),"--shell","/usr/sbin/nologin",self.user])
+ def test_exact_yj_account_is_allowed(self):
+  self.user="YJ"
+  with patch.object(prepare.grp,"getgrgid",return_value=types.SimpleNamespace(gr_name="YJ")):
+   self.assertEqual(self.run_prepare(),60000)
  def test_existing_foreign_data_is_not_claimed(self):
   self.data.mkdir();(self.data/"keep").write_text("keep")
   with patch.object(prepare.pwd,"getpwnam",side_effect=KeyError()),self.assertRaises(ValueError):self.run_prepare()
@@ -77,6 +81,11 @@ class CommandSetup(unittest.TestCase):
  def test_remove_leaves_changed_foreign_command(self):
   self.install();(self.directory/"YJ").write_text("different command");menu.remove("/opt/yuji-probe",self.directory)
   self.assertTrue((self.directory/"YJ").exists());self.assertFalse((self.directory/"yuji-probe").exists())
+ def test_yj_profile_and_legacy_profile_are_not_interchanged(self):
+  menu.install("/opt/YJ",self.directory)
+  self.assertIn("/opt/YJ/manage.sh",(self.directory/"YJ").read_text())
+  self.assertFalse((self.directory/"yuji-probe").exists())
+  with self.assertRaises(ValueError):menu.install("/opt/yuji-probe",self.directory)
  def test_refuses_other_instance_root(self):
   with self.assertRaises(ValueError):menu.install("/opt/other",self.directory)
 if __name__=="__main__":unittest.main()

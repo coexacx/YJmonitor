@@ -1,6 +1,6 @@
 # Linux 一键部署与维护
 
-本页适用于羽迹探针 Rust 独立版 0.11.4。安装器下载预编译发行包，不在用户服务器上编译 Rust，不需要数据库或 PHP。
+本页适用于羽迹探针 Rust 独立版 0.11.5。安装器下载预编译发行包，不在用户服务器上编译 Rust，不需要数据库或 PHP。
 
 ## 安装
 
@@ -8,20 +8,20 @@
 
 ~~~sh
 curl -fL --proto '=https' --proto-redir '=https' --tlsv1.2 \
-  https://raw.githubusercontent.com/coexacx/YJmonitor/v0.11.4/install.sh \
-  -o /root/yuji-install.sh
-bash /root/yuji-install.sh
+  https://raw.githubusercontent.com/coexacx/YJmonitor/v0.11.5/install.sh \
+  -o /root/YJ.sh
+bash /root/YJ.sh
 ~~~
 
 只需填写站点名称。脚本安装运行依赖、验证发行签名、自动创建独立服务账户、0700 私有数据目录、必要权限和随机管理员密码，结束后显示 IP:端口、管理员和初始密码。
 
-默认端口 19281。需要其他端口可运行 bash /root/yuji-install.sh --port 29281。运行 --check 仅检查系统与架构，不安装。需要自动化时可用 --site-name '站点名称'。
+默认端口 19281。需要其他端口可运行 bash /root/YJ.sh --port 29281。运行 --check 仅检查系统与架构，不安装。需要自动化时可用 --site-name '站点名称'。
 
 已有宝塔或其他站点不影响使用；安装器不占用 80/443，不安装 Nginx，不申请证书。只检查自己的目录、账户、服务名及端口；发现既有数据会停止覆盖。已通过本脚本安装的实例，再次运行脚本会进入管理菜单。
 
 ## 首次访问
 
-用安装结束显示的 HTTP 地址查看面板，初始管理员为 admin，密码随机生成。初始凭据保存在 /etc/yuji-probe/initial-admin.json，仅 root 可读。更改密码后可以删除此文件。
+用安装结束显示的 HTTP 地址查看面板，初始管理员为 admin，密码随机生成。初始凭据保存在 /etc/YJ/initial-admin.json，仅 root 可读。更改密码后可以删除此文件。
 
 HTTP 不加密。添加节点与使用终端前，可以选择菜单 13，填写已解析域名，自动配置 Nginx、证书和 HTTPS 入口；Cloudflare 橙云支持见 [自动 HTTPS](自动HTTPS.md)。也可按 [反向代理文档](反向代理.md) 手动配置。主控与 Agent 始终使用 WSS，不因初始 HTTP 访问入口而降级。
 
@@ -55,13 +55,14 @@ sudo YJ
 
 | 用途 | 路径 |
 | --- | --- |
-| 程序 | /opt/yuji-probe |
-| 私有状态 | /var/lib/yuji-probe/control |
-| 安装配置 | /etc/yuji-probe |
-| 系统服务 | yuji-probe.service |
-| 管理命令 | /usr/local/bin/yuji-probe |
+| 服务用户 / 用户组 | YJ / YJ |
+| 程序 | /opt/YJ |
+| 私有状态 | /var/lib/YJ/control |
+| 安装配置 | /etc/YJ |
+| 系统服务 | YJ.service |
+| 管理命令 | /usr/local/bin/YJ（运行 sudo YJ） |
 | 本机备份 | /var/backups/yuji-probe |
-| 签名更新器 | /etc/yuji-probe-rust-updaters/main.json |
+| 签名更新器 | /etc/YJ/update/main.json |
 
 本机备份会短暂停止主控以取得一致状态，然后恢复原运行状态；备份只允许 root 读取，内含密钥，不应放进网站目录。跨服务器迁移优先使用后台的加密备份、恢复与迁移流程。程序卸载后保留数据，不会清除被控服务器。
 
@@ -83,4 +84,4 @@ bash install.sh --release-dir /root/yuji-release --site-name '羽迹探针'
 
 ## 旧仓库迁移
 
-仓库已更名为 coexacx/YJmonitor。旧版更新器严格固定原仓库地址，已有安装先按 [仓库更名迁移说明](仓库更名-0.11.2.md) 运行一次迁移脚本。签名公钥、私有状态和节点凭据保持兼容。一键安装实例会同时安装 sudo YJ 入口，旧 yuji-probe 命令作为兼容别名保留。
+仓库已更名为 coexacx/YJmonitor。旧版更新器严格固定原仓库地址，已有安装先按 [仓库更名迁移说明](仓库更名-0.11.2.md) 运行一次迁移脚本。签名公钥、私有状态和节点凭据保持兼容。旧版一键安装实例会同时安装 sudo YJ 入口，旧 yuji-probe 命令作为兼容别名保留。

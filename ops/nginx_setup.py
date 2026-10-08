@@ -23,13 +23,16 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-CONF = pathlib.Path('/etc/yuji-probe/https')
-WORK = pathlib.Path('/var/lib/yuji-probe-https')
-WEBROOT = pathlib.Path('/var/lib/yuji-probe-acme')
-VENV = pathlib.Path('/opt/yuji-probe-certbot')
+LEGACY = pathlib.Path(__file__).resolve().parents[1] == pathlib.Path('/opt/yuji-probe')
+NAME = 'yuji-probe' if LEGACY else 'YJ'
+ROOT = pathlib.Path('/opt') / NAME
+CONF = pathlib.Path('/etc') / NAME / 'https'
+WORK = pathlib.Path('/var/lib') / (NAME + '-https')
+WEBROOT = pathlib.Path('/var/lib') / (NAME + '-acme')
+VENV = pathlib.Path('/opt') / (NAME + '-certbot')
 SYSTEMD = pathlib.Path('/etc/systemd/system')
-SITE_NAME = 'yuji-probe-managed.conf'
-TIMER = 'yuji-probe-https-renew.timer'
+SITE_NAME = NAME + '-managed.conf'
+TIMER = NAME + '-https-renew.timer'
 MARKER = '# Managed by Yuji Probe HTTPS. See docs/自动HTTPS.md.\n'
 ACME_SERVER = 'https://acme-v02.api.letsencrypt.org/directory'
 NGINX_KEYS = {
@@ -806,10 +809,11 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=full
-ReadWritePaths=/etc/yuji-probe/https
-ExecStart=/usr/bin/python3 -I /opt/yuji-probe/ops/nginx_setup.py --renew
+ReadWritePaths=__HTTPS_CONF__
+ExecStart=/usr/bin/python3 -I __ROOT__/ops/nginx_setup.py --renew
 TimeoutStartSec=600
 """
+    service = service.replace("__HTTPS_CONF__", str(CONF)).replace("__ROOT__", str(ROOT))
     timer = """[Unit]
 Description=Check Yuji Probe HTTPS certificate twice daily
 [Timer]
@@ -820,7 +824,7 @@ Persistent=true
 WantedBy=timers.target
 """
     marker = '# Managed by Yuji Probe HTTPS.\n'
-    for name, content in [('yuji-probe-https-renew.service', service), (TIMER, timer)]:
+    for name, content in [(NAME + '-https-renew.service', service), (TIMER, timer)]:
         path = SYSTEMD / name
         if path.exists() and not trusted(path).read_text().startswith(marker):
             raise ValueError('已有同名续期服务但不属于本程序，未覆盖：' + str(path))
@@ -993,7 +997,7 @@ def unconfigure():
     data = read_json(record)
     nginx = discover_nginx(False)
     site = choose_site(nginx, domain_name(data['domain']), data)
-    units = [SYSTEMD / TIMER, SYSTEMD / 'yuji-probe-https-renew.service']
+    units = [SYSTEMD / TIMER, SYSTEMD / NAME + '-https-renew.service']
     for path in units:
         if path.exists() and not trusted(path).read_text().startswith('# Managed by Yuji Probe HTTPS.\n'):
             raise ValueError('续期服务已被手动替换，未删除：' + str(path))
@@ -1045,7 +1049,7 @@ if __name__ == '__main__':
             raise ValueError('请使用 sudo YJ https；本入口仅供证书续期')
         import fcntl
         os.umask(0o077)
-        with open('/run/yuji-probe-manage.lock', 'a') as lock:
+        with open('/run/' + NAME + '-manage.lock', 'a') as lock:
             fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             renew()
     except (Exception, KeyboardInterrupt) as exc:

@@ -11,7 +11,7 @@ use sha2::{Digest, Sha256};
 use std::{net::SocketAddr, time::Duration};
 use tokio::time::timeout;
 use zeroize::Zeroizing;
-const RELEASE_ORIGIN: &str = "https://github.com/coexacx/YJmonitor/releases/download/v0.11.3/";
+const RELEASE_VERSION: &str = "0.11.3";
 pub const AGENT_VERSION: &str = "0.2.3";
 #[derive(Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -334,7 +334,11 @@ fn allowed_release_url(url: &reqwest::Url) -> bool {
     match url.host_str() {
         Some("github.com") => {
             url.path()
-                .starts_with("/coexacx/YJmonitor/releases/download/v0.11.3/")
+                .strip_prefix("/coexacx/YJmonitor/releases/download/v")
+                .and_then(|p| p.split_once('/'))
+                .is_some_and(|(version, name)| {
+                    crate::backup::valid_version(version) && valid_release_name(name)
+                })
                 && url.query().is_none()
         }
         Some("release-assets.githubusercontent.com") => {
@@ -347,11 +351,7 @@ fn allowed_release_url(url: &reqwest::Url) -> bool {
     }
 }
 pub async fn get(app: &App, name: &str, limit: usize) -> Result<Vec<u8>, &'static str> {
-    if name.is_empty()
-        || !name
-            .bytes()
-            .all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
-    {
+    if !valid_release_name(name) {
         return Err("invalid release name");
     }
     // Offline cache is only consumed by callers which verify the signed manifest and digest.
@@ -362,9 +362,32 @@ pub async fn get(app: &App, name: &str, limit: usize) -> Result<Vec<u8>, &'stati
         }
         return Err("release cache invalid");
     }
+    fetch_asset(app, RELEASE_VERSION, name, limit).await
+}
+fn valid_release_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 160
+        && name != "."
+        && name != ".."
+        && name
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b"-_.".contains(&b))
+}
+// Online metadata checks bypass the deployment cache and pin one validated release tag.
+pub async fn fetch_asset(
+    app: &App,
+    version: &str,
+    name: &str,
+    limit: usize,
+) -> Result<Vec<u8>, &'static str> {
+    if !crate::backup::valid_version(version) || !valid_release_name(name) {
+        return Err("invalid release asset");
+    }
     timeout(Duration::from_secs(50), async {
-        let mut url = reqwest::Url::parse(&format!("{RELEASE_ORIGIN}{name}"))
-            .map_err(|_| "invalid release URL")?;
+        let mut url = reqwest::Url::parse(&format!(
+            "https://github.com/coexacx/YJmonitor/releases/download/v{version}/{name}"
+        ))
+        .map_err(|_| "invalid release URL")?;
         for hop in 0..=4 {
             if !allowed_release_url(&url) {
                 return Err("untrusted release redirect");
@@ -412,7 +435,7 @@ pub async fn get(app: &App, name: &str, limit: usize) -> Result<Vec<u8>, &'stati
     .map_err(|_| "release download timeout")?
 }
 
-pub fn release(raw: &[u8], arch: &str) -> Result<ReleaseFile, &'static str> {
+pub fn manifest(raw: &[u8]) -> Result<Release, &'static str> {
     let e: SignedRelease = serde_json::from_slice(raw).map_err(|_| "invalid manifest")?;
     let payload = STANDARD.decode(e.payload).map_err(|_| "invalid manifest")?;
     let sig = STANDARD
@@ -429,18 +452,27 @@ pub fn release(raw: &[u8], arch: &str) -> Result<ReleaseFile, &'static str> {
     )
     .map_err(|_| "signature mismatch")?;
     let m: Release = serde_json::from_slice(&payload).map_err(|_| "invalid manifest")?;
+    if !crate::backup::valid_version(&m.version) {
+        return Err("invalid release version");
+    }
+    for arch in ["amd64", "arm64"] {
+        let f = m.files.get(arch).ok_or("architecture unavailable")?;
+        if f.name != format!("vistart-probe-agent-{}-linux-{arch}", m.version)
+            || !(1024..=32 * 1024 * 1024).contains(&f.size)
+            || f.sha256.len() != 64
+            || !f.sha256.bytes().all(|b| b.is_ascii_hexdigit())
+        {
+            return Err("invalid release entry");
+        }
+    }
+    Ok(m)
+}
+pub fn release(raw: &[u8], arch: &str) -> Result<ReleaseFile, &'static str> {
+    let m = manifest(raw)?;
     if m.version != AGENT_VERSION {
         return Err("unsupported release version");
     }
-    let f = m.files.get(arch).ok_or("architecture unavailable")?;
-    if f.name != format!("vistart-probe-agent-{AGENT_VERSION}-linux-{arch}")
-        || !(1024..=32 * 1024 * 1024).contains(&f.size)
-        || f.sha256.len() != 64
-        || !f.sha256.bytes().all(|b| b.is_ascii_hexdigit())
-    {
-        return Err("invalid release entry");
-    }
-    Ok(f.clone())
+    m.files.get(arch).cloned().ok_or("architecture unavailable")
 }
 pub async fn fetch(app: &App, arch: &str) -> Result<Vec<u8>, &'static str> {
     let f = release(&get(app, "stable.json", 16384).await?, arch)?;
@@ -920,5 +952,29 @@ mod tests {
         assert!(paths.iter().any(|p| p == "agent.manifest"));
         assert!(paths.iter().any(|p| p == "recovery-public"));
         assert!(paths.iter().all(|p| p.components().count() == 1));
+    }
+    #[test]
+    fn signed_agent_manifest_is_required_even_for_version_checks() {
+        let raw = include_bytes!("../assets/agent-stable-test.json");
+        assert_eq!(manifest(raw).unwrap().version, AGENT_VERSION);
+        let mut envelope: serde_json::Value = serde_json::from_slice(raw).unwrap();
+        envelope["payload"] = json!(STANDARD.encode(br#"{"version":"99.0.0","files":{}}"#));
+        assert!(manifest(&serde_json::to_vec(&envelope).unwrap()).is_err());
+        for name in [
+            "",
+            ".",
+            "..",
+            "../stable.json",
+            "stable.json?x=1",
+            "stable.json/",
+        ] {
+            assert!(!valid_release_name(name));
+        }
+        assert!(allowed_release_url(
+            &reqwest::Url::parse(
+                "https://github.com/coexacx/YJmonitor/releases/download/v0.99.0/stable.json"
+            )
+            .unwrap()
+        ));
     }
 }

@@ -3,8 +3,8 @@ set +x
 set -Eeuo pipefail
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 umask 077
-readonly YUJI_VERSION=0.11.4
-readonly YUJI_RELEASE_BASE=https://github.com/coexacx/YJmonitor/releases/download/v0.11.4
+readonly YUJI_VERSION=0.11.5
+readonly YUJI_RELEASE_BASE=https://github.com/coexacx/YJmonitor/releases/download/v0.11.5
 readonly YUJI_PUBLIC_KEY=o8+DdHbo82V7fxJEIiEhe5AK/frR91Fz5vjf/pDAnts=
 yuji_work='' yuji_name='' yuji_port=19281 yuji_cache='' yuji_check=0
 die(){ printf '\n  %s\n\n' "$*" >&2; exit 1; }
@@ -38,15 +38,22 @@ case "$(uname -m)" in x86_64) yuji_arch=amd64;; aarch64|arm64) yuji_arch=arm64;;
 if ! [[ "$yuji_port" =~ ^[0-9]{4,5}$ ]] || (( 10#$yuji_port < 1024 || 10#$yuji_port > 65535 )); then die '端口范围为 1024–65535。'; fi
 if (( yuji_check )); then printf '支持安装：%s %s · %s\n' "$ID" "$VERSION_ID" "$yuji_arch";exit 0;fi
 command -v flock >/dev/null || die '请先安装 util-linux。'
-exec 9>/run/yuji-probe-install.lock
+exec 9>/run/YJ-install.lock
 flock -n 9 || die '另一项安装正在进行。'
+if [[ -f /opt/YJ/manage.sh && -f /etc/YJ/instance.json ]]; then
+ python3 /opt/YJ/ops/install-command.py
+ exec bash /opt/YJ/manage.sh
+fi
+# Never replace or silently duplicate an existing standard installation.
 if [[ -f /opt/yuji-probe/manage.sh && -f /etc/yuji-probe/instance.json ]]; then
+ [[ ! -f /opt/yuji-probe/ops/install-command.py ]] || python3 /opt/yuji-probe/ops/install-command.py --root /opt/yuji-probe
  exec bash /opt/yuji-probe/manage.sh
 fi
-for yuji_path in /opt/yuji-probe /var/lib/yuji-probe /etc/yuji-probe /etc/systemd/system/yuji-probe.service /usr/local/bin/YJ /usr/local/bin/yuji-probe; do
+for yuji_path in /var/lib/YJ-update /usr/local/lib/YJ /etc/systemd/system/YJ-update-main.path /etc/systemd/system/YJ-update-main.service /opt/yuji-probe /var/lib/yuji-probe /etc/yuji-probe /etc/systemd/system/yuji-probe.service /opt/YJ /var/lib/YJ /etc/YJ /etc/systemd/system/YJ.service /usr/local/bin/YJ /usr/local/bin/yuji-probe; do
  [[ ! -e "$yuji_path" && ! -L "$yuji_path" ]] || die "已有 $yuji_path，安装已停止。现有站点请按升级文档操作。"
 done
-getent passwd yuji-probe >/dev/null && die 'yuji-probe 系统账户已存在，请先核对现有部署。'
+getent passwd YJ >/dev/null && die 'YJ 系统账户已存在，请先核对现有部署。'
+getent group YJ >/dev/null && die 'YJ 系统组已存在，请先核对现有部署。'
 printf '\n  羽迹探针  /  安装\n  ──────────────────────────────\n  版本  %s    端口  %s\n\n' "$YUJI_VERSION" "$yuji_port"
 if [[ -z "$yuji_name" ]]; then
  exec 3<>/dev/tty || die '需要交互终端，或使用 --site-name。'
@@ -57,13 +64,13 @@ printf '\n  正在准备运行环境…\n'
 if [[ "$yuji_platform" == apt ]]; then
  export DEBIAN_FRONTEND=noninteractive
  apt-get update -qq
- apt-get install -y --no-install-recommends ca-certificates curl openssl python3 iproute2 util-linux iputils-tracepath
+ apt-get install -y --no-install-recommends ca-certificates curl openssl python3 sudo iproute2 util-linux iputils-tracepath
 else
  yuji_curl_package=();command -v curl >/dev/null || yuji_curl_package=(curl-minimal)
- dnf install -y ca-certificates "${yuji_curl_package[@]}" openssl python3 iproute util-linux iputils
+ dnf install -y ca-certificates "${yuji_curl_package[@]}" openssl python3 sudo iproute util-linux iputils
 fi
 [[ -z "$(ss -H -ltn "( sport = :$yuji_port )")" ]] || die "端口 $yuji_port 已被使用，请用 --port 指定其他端口。"
-yuji_work=$(mktemp -d /var/tmp/yuji-probe-install.XXXXXXXX)
+yuji_work=$(mktemp -d /var/tmp/YJ-install.XXXXXXXX)
 printf '\n  正在下载并验证发行包…\n'
 timeout 240 python3 - "$YUJI_RELEASE_BASE" "$YUJI_PUBLIC_KEY" "$yuji_work" "$YUJI_VERSION" "$yuji_cache" <<'PYDOWNLOAD'
 import base64, hashlib, json, pathlib, ssl, stat, subprocess, sys, urllib.parse, urllib.request, zipfile
@@ -129,7 +136,7 @@ with zipfile.ZipFile(archive) as z:
         seen.add(name)
     z.extractall(root/"unpacked")
 package=root/"unpacked"/prefix.rstrip("/")
-for required in ["bin/probe-linux-amd64","bin/probe-linux-arm64","ops/templates/nginx-rust.conf","ops/templates/yuji-probe-rust.service"]:
+for required in ["bin/probe-linux-amd64","bin/probe-linux-arm64","ops/templates/nginx-rust.conf","ops/templates/YJ.service"]:
     if not (package/required).is_file(): raise RuntimeError("发行包缺少必要文件")
 print("发行包 Ed25519 签名、SHA-256、大小与解压路径校验通过。")
 PYDOWNLOAD
@@ -144,33 +151,33 @@ except Exception:
 PYIP
 )
 yuji_origin="http://$yuji_ip:$yuji_port"
-install -d -m 0755 /opt/yuji-probe
-cp -a "$yuji_work/unpacked/yuji-probe-rust-$YUJI_VERSION/." /opt/yuji-probe/
-find /opt/yuji-probe -type d -exec chmod 0755 {} +
-find /opt/yuji-probe -type f -exec chmod 0644 {} +
-chmod 0755 /opt/yuji-probe/bin/probe-linux-* /opt/yuji-probe/manage.sh
-rm -f /opt/yuji-probe/storage/.gitkeep
-rmdir /opt/yuji-probe/storage
-python3 /opt/yuji-probe/ops/prepare-service.py --root /opt/yuji-probe --data /var/lib/yuji-probe --user yuji-probe
-ln -s /var/lib/yuji-probe /opt/yuji-probe/storage
-install -d -m 0700 /etc/yuji-probe
+install -d -m 0755 /opt/YJ
+cp -a "$yuji_work/unpacked/yuji-probe-rust-$YUJI_VERSION/." /opt/YJ/
+find /opt/YJ -type d -exec chmod 0755 {} +
+find /opt/YJ -type f -exec chmod 0644 {} +
+chmod 0755 /opt/YJ/bin/probe-linux-* /opt/YJ/manage.sh
+rm -f /opt/YJ/storage/.gitkeep
+rmdir /opt/YJ/storage
+python3 /opt/YJ/ops/prepare-service.py --root /opt/YJ --data /var/lib/YJ --user YJ
+ln -s /var/lib/YJ /opt/YJ/storage
+install -d -m 0700 /etc/YJ
 python3 - "$yuji_name" "$yuji_origin" <<'PYINIT'
 import json,pathlib,secrets,sys
 name,origin=sys.argv[1:]
 password=secrets.token_urlsafe(24)
-path=pathlib.Path('/etc/yuji-probe/initial-admin.json')
+path=pathlib.Path('/etc/YJ/initial-admin.json')
 path.write_text(json.dumps({'name':name,'username':'admin','password':password,'url':origin},ensure_ascii=False))
 path.chmod(0o600)
 PYINIT
-python3 -c 'import json;d=json.load(open("/etc/yuji-probe/initial-admin.json"));d.pop("url");print(json.dumps(d))' | runuser -u yuji-probe -- /opt/yuji-probe/bin/probe-linux-"$yuji_arch" -web -state /var/lib/yuji-probe/control -origin "$yuji_origin" --install
-python3 /opt/yuji-probe/ops/manage.py configure "$yuji_origin" "$yuji_port"
-python3 /opt/yuji-probe/ops/install-command.py
+python3 -c 'import json;d=json.load(open("/etc/YJ/initial-admin.json"));d.pop("url");print(json.dumps(d))' | runuser -u YJ -- /opt/YJ/bin/probe-linux-"$yuji_arch" -web -state /var/lib/YJ/control -origin "$yuji_origin" --install
+python3 /opt/YJ/ops/manage.py configure "$yuji_origin" "$yuji_port"
+python3 /opt/YJ/ops/install-command.py
 printf '\n  安装完成\n  ──────────────────────────────\n'
 python3 - <<'PYSHOW'
 import json
-d=json.load(open('/etc/yuji-probe/initial-admin.json'))
+d=json.load(open('/etc/YJ/initial-admin.json'))
 print('  访问地址  '+d['url']+'\n  管理员    '+d['username']+'\n  初始密码  '+d['password'])
 print('\n  管理菜单  sudo YJ\n  反向代理  https://github.com/coexacx/YJmonitor/blob/main/docs/反向代理.md')
 print('\n  自动 HTTPS：运行 sudo YJ，选择 13。域名需已解析到本机。')
-print('\n  初始凭据保存在 /etc/yuji-probe/initial-admin.json（仅 root 可读）。')
+print('\n  初始凭据保存在 /etc/YJ/initial-admin.json（仅 root 可读）。')
 PYSHOW

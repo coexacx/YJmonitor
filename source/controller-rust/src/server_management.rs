@@ -1,5 +1,5 @@
 //! Private server inventory, observed connection health and durable bounded upgrade requests.
-use crate::{auth, core::*, migration, model::*, nodes, operations};
+use crate::{core::*, migration, model::*, nodes, operations};
 use chrono::DateTime;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -37,6 +37,12 @@ pub fn upgrade_blocked(i: &Inner, n: &Node) -> Option<&'static str> {
         "amd64" | "x86_64" | "arm64" | "aarch64"
     ) {
         return Some("节点架构尚未识别或不支持");
+    }
+    if !crate::backup::valid_version(&n.agent_version) {
+        return Some("等待 Agent 上报有效版本");
+    }
+    if !crate::backup::newer_release(crate::deploy::AGENT_VERSION, &n.agent_version) {
+        return Some("无需升级：当前版本已达到或高于配套版本");
     }
     None
 }
@@ -131,7 +137,6 @@ pub fn batch_update(app: App, c: Context, body: Vec<u8>) -> ApiResult<ApiReply> 
     if c.method != "POST" {
         return Err(ApiError::new(405, "请求方式不支持"));
     }
-    auth::require_elevated(&i, &c)?;
     let v: BatchInput = decode(&body)?;
     validate_ids(&v.ids)?;
     i.request("batch-agent-update", 30)?;
@@ -225,6 +230,7 @@ mod tests {
                 n.public.online = true;
                 n.public.arch = "x86_64".into();
                 n.last_seen = now();
+                n.agent_version = "0.2.2".into();
                 app.lock().data.nodes.push(n);
                 app.lock().data.secrets.insert(
                     id,
@@ -266,7 +272,7 @@ mod tests {
         }
     }
     #[test]
-    fn batch_requires_admin_csrf_and_recent_reauthentication() {
+    fn batch_requires_admin_csrf_but_no_second_password() {
         let f = Fixture::new();
         let body = br#"{"ids":["node-0"]}"#.to_vec();
         let mut c = f.context();
@@ -293,8 +299,10 @@ mod tests {
             .get_mut(&f.session.id)
             .unwrap()
             .elevated = 0;
-        assert_eq!(f.submit(json!(["node-0"])).err().unwrap().status, 428);
-        assert!(f.app.lock().ops.transfers.is_empty());
+        assert_eq!(
+            f.submit(json!(["node-0"])).unwrap().value["accepted"],
+            json!(["node-0"])
+        );
     }
     #[test]
     fn strict_batch_limits_and_unknown_fields() {
@@ -644,5 +652,86 @@ mod tests {
                 .status,
             429
         );
+    }
+    #[test]
+    fn current_newer_unknown_agents_cannot_be_reinstalled() {
+        let f = Fixture::new();
+        for version in [crate::deploy::AGENT_VERSION, "9.0.0", "", "garbage"] {
+            f.app.lock().data.nodes[0].agent_version = version.into();
+            let result = f.submit(json!(["node-0"])).unwrap();
+            assert!(result.value["accepted"].as_array().unwrap().is_empty());
+            assert_eq!(result.value["rejected"].as_array().unwrap().len(), 1);
+            assert!(f.app.lock().ops.transfers.is_empty());
+            assert_eq!(
+                migration::start_manage(&f.app, &mut f.app.lock(), "node-0", "upgrade")
+                    .unwrap_err()
+                    .status,
+                409
+            );
+        }
+    }
+    #[tokio::test]
+    async fn version_operations_keep_auth_csrf_without_second_password() {
+        let f = Fixture::new();
+        f.app
+            .lock()
+            .sessions
+            .get_mut(&f.session.id)
+            .unwrap()
+            .elevated = 0;
+        std::fs::write(f.app.0.dir.join("updater-enabled"), b"test").unwrap();
+        for action in [
+            "agent-update",
+            "agent-rollback",
+            "panel-update",
+            "panel-rollback",
+        ] {
+            let mut c = f.context();
+            c.path = format!("/api/admin/ops/{action}");
+            let body = br#"{"id":"node-0","version":"99.0.0"}"#.to_vec();
+            let mut missing = c.clone();
+            missing.sid.clear();
+            assert_eq!(
+                operations::api(f.app.clone(), missing, body.clone())
+                    .await
+                    .err()
+                    .unwrap()
+                    .status,
+                401
+            );
+            let mut bad_csrf = c.clone();
+            bad_csrf.headers.remove("X-CSRF-Token");
+            assert_eq!(
+                operations::api(f.app.clone(), bad_csrf, body.clone())
+                    .await
+                    .err()
+                    .unwrap()
+                    .status,
+                403
+            );
+            f.app.lock().updates.latest = "99.0.0".into();
+            f.app.lock().updates.checked_at = now();
+            assert_eq!(
+                operations::api(f.app.clone(), c, body)
+                    .await
+                    .unwrap()
+                    .status,
+                202
+            );
+            f.app.lock().ops.transfers.clear();
+            let _ = std::fs::remove_file(f.app.0.dir.join("update-request.json"));
+        }
+        for action in ["recovery", "sessions/revoke"] {
+            let mut c = f.context();
+            c.path = format!("/api/admin/ops/{action}");
+            assert_eq!(
+                operations::api(f.app.clone(), c, br#"{"id":"others"}"#.to_vec())
+                    .await
+                    .err()
+                    .unwrap()
+                    .status,
+                428
+            );
+        }
     }
 }

@@ -61,6 +61,6 @@ with zipfile.ZipFile(archive) as z:
         seen.add(name)
     z.extractall(root/"unpacked")
 package=root/"unpacked"/prefix.rstrip("/")
-for required in ["bin/probe-linux-amd64","bin/probe-linux-arm64","ops/templates/nginx-rust.conf","ops/templates/yuji-probe-rust.service"]:
+for required in ["bin/probe-linux-amd64","bin/probe-linux-arm64","ops/templates/nginx-rust.conf","ops/templates/YJ.service"]:
     if not (package/required).is_file(): raise RuntimeError("发行包缺少必要文件")
 print("发行包 Ed25519 签名、SHA-256、大小与解压路径校验通过。")

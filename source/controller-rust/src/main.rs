@@ -24,6 +24,7 @@ mod telegram;
 mod terminal;
 mod theme;
 mod tmux_stream;
+mod updates;
 mod web;
 use crate::{core::*, model::*};
 use std::{

@@ -7,6 +7,14 @@ PUBLIC="o8+DdHbo82V7fxJEIiEhe5AK/frR91Fz5vjf/pDAnts="
 BASE=pathlib.Path("/var/lib/yuji-probe-rust-updater")
 LIB=pathlib.Path("/usr/local/lib/yuji-probe-rust-updater")
 CONF=pathlib.Path("/etc/yuji-probe-rust-updaters")
+def select_layout(root):
+    global BASE,LIB,CONF
+    if pathlib.Path(root)==pathlib.Path("/opt/YJ"):
+        BASE=pathlib.Path("/var/lib/YJ-update");LIB=pathlib.Path("/usr/local/lib/YJ");CONF=pathlib.Path("/etc/YJ/update")
+    else:
+        BASE=pathlib.Path("/var/lib/yuji-probe-rust-updater");LIB=pathlib.Path("/usr/local/lib/yuji-probe-rust-updater");CONF=pathlib.Path("/etc/yuji-probe-rust-updaters")
+if pathlib.Path(__file__).resolve().parent==pathlib.Path("/usr/local/lib/YJ") or pathlib.Path(__file__).resolve().parents[1]==pathlib.Path("/opt/YJ"):
+    select_layout("/opt/YJ")
 VERSION=re.compile(r"[0-9]{1,5}\.[0-9]{1,5}\.[0-9]{1,5}\Z")
 def private(path):path.mkdir(parents=True,exist_ok=True,mode=0o700);path.chmod(0o700)
 def atomic(path,data,uid=0,gid=0,mode=0o600):
@@ -185,6 +193,7 @@ def check(cfg,version):
     raise ValueError("updated controller failed health check")
 
 def install_helper(args):
+    select_layout(args.root)
     if not re.fullmatch("[a-z0-9-]{1,40}",args.name):raise ValueError("invalid instance name")
     root=pathlib.Path(args.root).resolve();state=pathlib.Path(args.state).resolve()
     if state.name!="control" or state.parent in (pathlib.Path("/"),pathlib.Path("/var"),pathlib.Path("/var/lib"),pathlib.Path("/srv"),pathlib.Path("/opt")) or state.parent==root:raise ValueError("state must be a dedicated instance directory ending in /control")
@@ -199,7 +208,7 @@ def install_helper(args):
     cfg={"name":args.name,"root":str(root),"state":str(state),"service":args.service,"origin":args.origin.rstrip("/"),"listen":args.listen,"uid":owner.st_uid,"gid":owner.st_gid}
     cfg["distribution"]=args.distribution
     cp=CONF/(args.name+".json");atomic(cp,cfg)
-    unit="yuji-probe-rust-update-"+args.name
+    unit=("YJ-update-" if root==pathlib.Path("/opt/YJ") else "yuji-probe-rust-update-")+args.name
     if any("\n" in str(v) or "%" in str(v) for v in cfg.values()):raise ValueError("invalid instance configuration")
     system=pathlib.Path("/etc/systemd/system")
     (system/(unit+".service")).write_text("[Unit]\nDescription=Yuji Probe signed update ("+args.name+")\n[Service]\nType=oneshot\nExecStart=/usr/bin/python3 "+str(dest)+" --run "+str(cp)+"\nUMask=0077\nTimeoutStartSec=600\n")
@@ -208,6 +217,7 @@ def install_helper(args):
     subprocess.run(["systemctl","daemon-reload"],check=True);subprocess.run(["systemctl","enable","--now",unit+".path"],check=True,stdout=subprocess.DEVNULL)
     print("Signed updater installed for",args.name)
 def apply(cfg,request,cache=None):
+    select_layout(cfg["root"])
     work=BASE/cfg["name"];private(work);root=pathlib.Path(cfg["root"]);state=pathlib.Path(cfg["state"])
     prior=work/"previous-program";priorstate=work/"previous-state";meta=work/"previous.json"
     distribution=cfg.get("distribution","rust")
@@ -227,6 +237,11 @@ def apply(cfg,request,cache=None):
             version=json.loads(trusted_file(meta,2048)).get("version")
             target=tmp/"stage";shutil.copytree(prior,target,ignore=shutil.ignore_patterns("storage"))
             restore_state=priorstate
+        if action=="rollback" and root==pathlib.Path("/opt/YJ") and tuple(map(int,version.split(".")))<(0,11,5):
+            for name in ("manage.sh","ops/manage.py","ops/install-command.py","ops/prepare-service.py","ops/update-panel.py","ops/nginx_setup.py","ops/templates/YJ-direct.service","ops/templates/YJ.service"):
+                src=root/name
+                if not src.is_file() or src.is_symlink():raise ValueError("YJ compatibility helper is unavailable")
+                dest=target/name;dest.parent.mkdir(parents=True,exist_ok=True);shutil.copy2(src,dest)
         for local in ("php-fpm.production.conf","php-fpm.test.conf","nginx-test.conf"):
             existing=root/"ops"/local
             if existing.is_file() and not existing.is_symlink():
@@ -277,7 +292,7 @@ def apply(cfg,request,cache=None):
             raise
     return version
 def run(args):
-    cfgpath=pathlib.Path(args.run);cfg=json.loads(trusted_file(cfgpath,8192));work=BASE/cfg["name"];private(work)
+    cfgpath=pathlib.Path(args.run);cfg=json.loads(trusted_file(cfgpath,8192));select_layout(cfg["root"]);work=BASE/cfg["name"];private(work)
     with (work/"lock").open("a") as lock:
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         state=pathlib.Path(cfg["state"]);path=state/"update-request.json"

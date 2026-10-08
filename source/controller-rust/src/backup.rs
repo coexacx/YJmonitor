@@ -16,7 +16,6 @@ use sha2::Sha256;
 use std::{
     collections::HashMap,
     io::{Read, Write},
-    time::Duration,
 };
 use zeroize::Zeroizing;
 const AAD: &[u8] = b"yuji-probe-backup-v1:pbkdf2-sha256:600000:aes256gcm";
@@ -625,7 +624,7 @@ pub fn valid_version(s: &str) -> bool {
             .iter()
             .all(|v| !v.is_empty() && v.len() <= 5 && v.bytes().all(|b| b.is_ascii_digit()))
 }
-fn newer_release(candidate: &str, current: &str) -> bool {
+pub fn newer_release(candidate: &str, current: &str) -> bool {
     if !valid_version(candidate) || !valid_version(current) {
         return false;
     }
@@ -635,46 +634,6 @@ fn newer_release(candidate: &str, current: &str) -> bool {
             .collect::<Vec<_>>()
     };
     parts(candidate) > parts(current)
-}
-pub async fn check_release(app: &App) -> ApiResult<ApiReply> {
-    let response = tokio::time::timeout(
-        Duration::from_secs(10),
-        app.0
-            .http
-            .get("https://api.github.com/repos/coexacx/YJmonitor/releases/latest")
-            .send(),
-    )
-    .await
-    .map_err(|_| ApiError::new(502, "GitHub 查询超时"))?
-    .map_err(|_| ApiError::new(502, "GitHub 暂不可用"))?;
-    if response.status() != 200 {
-        return Err(ApiError::new(502, "GitHub 查询失败"));
-    }
-    let mut response = response;
-    let mut bytes = Vec::new();
-    while let Some(chunk) = response
-        .chunk()
-        .await
-        .map_err(|_| ApiError::new(502, "GitHub 响应失败"))?
-    {
-        if bytes.len() + chunk.len() > 1024 * 1024 {
-            return Err(ApiError::new(502, "发布信息过大"));
-        }
-        bytes.extend(chunk);
-    }
-    let value: Value =
-        serde_json::from_slice(&bytes).map_err(|_| ApiError::new(502, "发布信息格式不正确"))?;
-    if value["draft"] != false || value["prerelease"] != false {
-        return Err(ApiError::new(502, "Rust 正式发布信息暂不可用"));
-    }
-    let tag = value["tag_name"].as_str().unwrap_or("");
-    let version = tag.strip_prefix("v").unwrap_or("");
-    if !valid_version(version) {
-        return Err(ApiError::new(502, "发布版本格式不正确"));
-    }
-    Ok(ApiReply::ok(
-        json!({"current":VERSION,"latest":version,"url":format!("https://github.com/coexacx/YJmonitor/releases/tag/{tag}"),"available":newer_release(version,VERSION)}),
-    ))
 }
 #[cfg(test)]
 mod tests {

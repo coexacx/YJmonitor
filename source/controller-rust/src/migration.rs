@@ -23,6 +23,11 @@ pub fn start_manage(app: &App, i: &mut Inner, id: &str, action: &str) -> ApiResu
         .iter()
         .find(|n| n.public.id == id)
         .ok_or_else(|| ApiError::new(404, "节点不存在"))?;
+    if action == "upgrade"
+        && let Some(reason) = crate::server_management::upgrade_blocked(i, n)
+    {
+        return Err(ApiError::new(409, reason));
+    }
     if i.jobs
         .values()
         .any(|j| j.node_id == id && j.state == "running")

@@ -3,7 +3,10 @@ set +x
 set -Eeuo pipefail
 export PATH=/usr/sbin:/usr/bin:/sbin:/bin
 umask 077
-readonly YUJI_OPS=/opt/yuji-probe/ops/manage.py
+YUJI_ROOT=$(cd -- "$(dirname -- "$0")" && pwd -P)
+case "$YUJI_ROOT" in /opt/YJ) YUJI_SERVICE=YJ.service;; /opt/yuji-probe) YUJI_SERVICE=yuji-probe.service;; *) printf '请使用已安装的 sudo YJ。\n';exit 1;; esac
+readonly YUJI_ROOT YUJI_SERVICE
+readonly YUJI_OPS="$YUJI_ROOT/ops/manage.py"
 yuji_color='' yuji_dim='' yuji_reset=''
 if [[ -t 1 && ${TERM:-dumb} != dumb && -z ${NO_COLOR:-} ]]; then
  yuji_color=$'\033[36m';yuji_dim=$'\033[2m';yuji_reset=$'\033[0m'
@@ -28,8 +31,8 @@ while true; do
   2) python3 "$YUJI_OPS" restart || true;;
   3) python3 "$YUJI_OPS" start || true;;
   4) python3 "$YUJI_OPS" stop || true;;
-  5) journalctl -u yuji-probe.service -n 80 --no-pager;;
-  6) systemctl status yuji-probe.service --no-pager || true;;
+  5) journalctl -u "$YUJI_SERVICE" -n 80 --no-pager;;
+  6) systemctl status "$YUJI_SERVICE" --no-pager || true;;
   7) python3 "$YUJI_OPS" address || true;;
   8) python3 "$YUJI_OPS" backup || true;;
   9) python3 "$YUJI_OPS" reset-mfa || true;;

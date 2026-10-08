@@ -1,5 +1,5 @@
-import {agentVersionLabel,compareVersions} from './version-status.mjs';
-import {createPager} from './pagination.mjs';
+import {agentVersionLabel,compareVersions} from "/assets/version-status-005a4f2e5674.js";
+import {createPager} from "/assets/pagination-d84897e63d5d.js";
 export const taskLabel=t=>({pending:'等待升级',running:'执行中',done:'已完成',failed:'失败',retry:'等待重试'}[t?.state]||'—');
 export function createAgentMaintenance({el,api,toast,button,getRecords,refresh}){
  const pager=createPager(el,()=>update(),50,'Agent 版本列表');

@@ -6,18 +6,18 @@
 
 1. 将域名的 A 记录解析到主控服务器；有 AAAA 记录时也必须正确。Cloudflare 可以保持橙云代理。
 2. 云安全组和本机防火墙允许访问 80、443。Cloudflare 的 SSL/TLS 回源模式应设为 **Full (strict)**。Flexible 会造成 HTTPS 跳转循环，脚本不会代改账户设置。
-3. 运行 sudo yuji-probe，选择 **13 配置 Nginx + HTTPS**，填写域名，例如 probe.example.com。不要填写协议、端口或路径。
+3. 运行 sudo YJ，选择 **13 配置 Nginx + HTTPS**，填写域名，例如 probe.example.com。不要填写协议、端口或路径。
 4. 通常无需其他输入。脚本申请 Let’s Encrypt 证书、生成站点、启用自动续期，并将主控改为回环监听。完成后显示 https://probe.example.com。
 
 也可以直接运行：
 
 ~~~sh
-sudo yuji-probe https
+sudo YJ https
 ~~~
 
 域名输入前会显示 Let’s Encrypt 订阅协议链接。脚本使用无邮箱 ACME 账户，不要求再填写邮箱；续期结果通过本机 systemd 日志查看。公开证书会进入证书透明度日志。
 
-此功能面向 /opt/yuji-probe、yuji-probe.service 的一键安装实例。已有宝塔手动安装的自定义目录、用户和服务名继续使用 [手动反向代理文档](反向代理.md)，不要将一键菜单强行指向旧实例。
+此功能面向 /opt/YJ、YJ.service 的一键安装实例。已有宝塔手动安装的自定义目录、用户和服务名继续使用 [手动反向代理文档](反向代理.md)，不要将一键菜单强行指向旧实例。
 
 ## Cloudflare 已开启代理
 
@@ -32,7 +32,7 @@ sudo yuji-probe https
 3. Zone Resources 限定为该域名所属的一个 Zone，例如 example.com，不要选择所有域名。
 4. 将 Token 粘贴到终端的隐藏输入框。无需提供账户全局 API Key。
 
-Token 只用于临时创建、删除 _acme-challenge 的 TXT 记录。凭据按域名存放于 /etc/yuji-probe/https/yuji-*-cloudflare.ini，权限 0600，仅 root 可读；不会进入命令行参数、源码包或面板数据库。续期仍需要这个 Token，撤销或限制失效后需及时更换。
+Token 只用于临时创建、删除 _acme-challenge 的 TXT 记录。凭据按域名存放于 /etc/YJ/https/yuji-*-cloudflare.ini，权限 0600，仅 root 可读；不会进入命令行参数、源码包或面板数据库。续期仍需要这个 Token，撤销或限制失效后需及时更换。
 
 **只填写域名无法绕过任意 Cloudflare 安全规则。** HTTP 验证受阻时需要上述受限 Token，或自行放行 /.well-known/acme-challenge/。没有 Token、也无法开放验证路径时会退出并恢复站点配置。证书签发成功也不代表 WAF 会允许 Agent WSS；正常业务仍需允许节点访问 /api/agent、浏览器访问 /api/terminal，以及面板 API。
 
@@ -53,27 +53,27 @@ SELinux 启用时，为主控端口安装单独的连接策略，并标记本工
 
 ## 证书与运行文件
 
-证书工具使用 /opt/yuji-probe-certbot 中的独立 Python 虚拟环境，不修改系统 Python 包。先更新该环境内的 pip，再从官方 PyPI 安装兼容的 Certbot 和 Cloudflare 插件，只接收预编译 wheel。它只在申请、续期时运行，没有额外常驻 Python 服务。
+证书工具使用 /opt/YJ-certbot 中的独立 Python 虚拟环境，不修改系统 Python 包。先更新该环境内的 pip，再从官方 PyPI 安装兼容的 Certbot 和 Cloudflare 插件，只接收预编译 wheel。它只在申请、续期时运行，没有额外常驻 Python 服务。
 
 | 内容 | 路径 |
 | --- | --- |
-| 站点归属与摘要 | /etc/yuji-probe/https/site.json |
-| ACME 账户、证书、续期配置 | /etc/yuji-probe/https/letsencrypt |
-| Cloudflare 凭据 | /etc/yuji-probe/https/yuji-*-cloudflare.ini |
-| 公开验证文件目录 | /var/lib/yuji-probe-acme |
-| 私有工具日志 | /var/lib/yuji-probe-https |
-| 续期计时器 | yuji-probe-https-renew.timer |
-| 续期服务 | yuji-probe-https-renew.service |
+| 站点归属与摘要 | /etc/YJ/https/site.json |
+| ACME 账户、证书、续期配置 | /etc/YJ/https/letsencrypt |
+| Cloudflare 凭据 | /etc/YJ/https/yuji-*-cloudflare.ini |
+| 公开验证文件目录 | /var/lib/YJ-acme |
+| 私有工具日志 | /var/lib/YJ-https |
+| 续期计时器 | YJ-https-renew.timer |
+| 续期服务 | YJ-https-renew.service |
 
 计时器每天检查两次，并有随机延迟；只有接近续期时间才向 CA 申请。发生实际续期后，先校验证书和 Nginx 配置，再平滑重载。证书未变化时不会为例行检查重载 Nginx。续期脚本随签名发行包更新，不依赖单独下载的远程脚本。
 
 ~~~sh
-systemctl list-timers yuji-probe-https-renew.timer
-systemctl start yuji-probe-https-renew.service
-journalctl -u yuji-probe-https-renew.service -n 60 --no-pager
+systemctl list-timers YJ-https-renew.timer
+systemctl start YJ-https-renew.service
+journalctl -u YJ-https-renew.service -n 60 --no-pager
 ~~~
 
-首次申请或续期失败的详情保存在 /var/lib/yuji-probe-https/last-certbot.log，仅 root 可读。Token 失效时使用 root 编辑对应凭据文件，保持 0600，再启动续期服务。不要公开原始证书日志、ACME 账户目录或凭据文件。
+首次申请或续期失败的详情保存在 /var/lib/YJ-https/last-certbot.log，仅 root 可读。Token 失效时使用 root 编辑对应凭据文件，保持 0600，再启动续期服务。不要公开原始证书日志、ACME 账户目录或凭据文件。
 
 重复选择菜单 13、填写同一域名，会检查当前站点并保留有效证书，避免重复申请。自动生成文件被手动编辑后，摘要检查会阻止静默覆盖；此时请核对文件，使用手动管理或恢复本工具原配置。请勿修改 site.json 中的摘要来跳过检查。
 

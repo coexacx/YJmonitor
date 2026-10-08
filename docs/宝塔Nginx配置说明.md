@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | 网站 → 目标站点 → 配置文件 | `/www/server/panel/vhost/nginx/probe.example.com.conf` | 域名、证书、ACME 验证、站点参数，以及指向伪静态文件的 `include` |
 | 网站 → 目标站点 → 伪静态 | `/www/server/panel/vhost/rewrite/probe.example.com.conf` | 敏感路径限制、WebSocket 和普通请求的 `location` 代理规则 |
-| Rust systemd 服务 | `/etc/systemd/system/yuji-probe-rust.service` | `-listen 127.0.0.1:19282 -origin https://probe.example.com -web` |
+| Rust systemd 服务 | `/etc/systemd/system/YJ.service` | `-listen 127.0.0.1:19282 -origin https://probe.example.com -web` |
 
 文件名、界面名称以实际宝塔站点为准；核对主配置中的 `include` 路径，不要修改其他站点。
 
@@ -29,7 +29,7 @@ cp /www/server/panel/vhost/nginx/probe.example.com.conf "$yuji_backup/site.conf"
 cp /www/server/panel/vhost/rewrite/probe.example.com.conf "$yuji_backup/rewrite.conf"
 ~~~
 
-保留本网站的 `listen`、`server_name`、SSL 证书路径、HTTPS 跳转、证书申请与续期验证配置、已有的可信代理 IP 配置。程序目录 `/opt/yuji-probe-rust` 和私有数据目录 `/var/lib/yuji-probe-rust` 不需要设为 Nginx 的网站根目录；页面和静态资源均由 Rust 返回。
+保留本网站的 `listen`、`server_name`、SSL 证书路径、HTTPS 跳转、证书申请与续期验证配置、已有的可信代理 IP 配置。程序目录 `/opt/YJ` 和私有数据目录 `/var/lib/YJ` 不需要设为 Nginx 的网站根目录；页面和静态资源均由 Rust 返回。
 
 仅在本网站移除以下冲突项，再按所选方案配置：
 
@@ -158,7 +158,7 @@ location / {
 `reload` 重新加载配置；通常无需停止 Nginx 或重启 Rust。需要确认文件是否被加载时，在服务器本地查看 `/www/server/nginx/sbin/nginx -T` 输出中的配置文件路径和对应 `include`。不要只检查另一个未运行的系统 Nginx。
 
 ~~~sh
-systemctl status yuji-probe-rust --no-pager
+systemctl status YJ --no-pager
 ss -ltnp 'sport = :19282'
 curl -I https://probe.example.com/
 curl -i https://probe.example.com/_internal/health

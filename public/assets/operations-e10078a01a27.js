@@ -1,6 +1,6 @@
-import {updateNotice} from './version-status.mjs';
-import {createAgentMaintenance} from './agent-maintenance.mjs';
-import {renderOffsite} from './offsite.mjs';
+import {updateNotice} from "/assets/version-status-005a4f2e5674.js";
+import {createAgentMaintenance} from "/assets/agent-maintenance-3f31c0956484.js";
+import {renderOffsite} from "/assets/offsite-a40ce560bd22.js";
 
 export function createOperations({el,api,toast,field,button,heading,getRecords,getAuth,refresh}){
  const apiRoot='/api/admin/ops/';

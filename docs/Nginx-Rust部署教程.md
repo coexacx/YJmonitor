@@ -1,4 +1,4 @@
-# Nginx + Rust 部署教程（0.11.4）
+# Nginx + Rust 部署教程（0.11.5）
 
 本发行版将页面、静态资源、网页安装向导、API、WSS 和业务主控放在一个 Rust 可执行文件里。运行时使用 Nginx 与一个主控进程，不启动 PHP-FPM，不需要数据库、Node.js 或 Rust 编译环境。源码包同时附带 amd64、arm64 二进制，实际只运行对应架构的一个。
 
@@ -14,7 +14,7 @@
 
 ## 二、宝塔或已有 Nginx 的手动安装
 
-以下用 `probe.example.com` 举例，必须替换成自己的域名。使用独立项目目录 `/opt/yuji-probe-rust`，数据目录 `/var/lib/yuji-probe-rust`，内部端口 `19282`。部署第二套面板时不要共用这些目录、用户、服务名或内部端口。
+以下用 `probe.example.com` 举例，必须替换成自己的域名。使用独立项目目录 `/opt/YJ`，数据目录 `/var/lib/YJ`，内部端口 `19282`。部署第二套面板时不要共用这些目录、用户、服务名或内部端口。
 
 ### 1. 准备站点和证书
 
@@ -26,17 +26,17 @@
 
 ### 2. 下载完整发行包
 
-到 [v0.11.4 Release](https://github.com/coexacx/YJmonitor/releases/tag/v0.11.4) 下载 `yuji-probe-rust-0.11.4.zip` 及同名 `.sha256` 文件。不要下载 GitHub 自动生成的 Source code 包：它没有预编译二进制。
+到 [v0.11.5 Release](https://github.com/coexacx/YJmonitor/releases/tag/v0.11.5) 下载 `yuji-probe-rust-0.11.5.zip` 及同名 `.sha256` 文件。不要下载 GitHub 自动生成的 Source code 包：它没有预编译二进制。
 
 ```sh
-install -d -m 700 /root/yuji-rust-install
-cd /root/yuji-rust-install
-curl -fLO --proto '=https' --proto-redir '=https' https://github.com/coexacx/YJmonitor/releases/download/v0.11.4/yuji-probe-rust-0.11.4.zip
-curl -fLO --proto '=https' --proto-redir '=https' https://github.com/coexacx/YJmonitor/releases/download/v0.11.4/yuji-probe-rust-0.11.4.zip.sha256
-sha256sum -c yuji-probe-rust-0.11.4.zip.sha256
-unzip yuji-probe-rust-0.11.4.zip
-test ! -e /opt/yuji-probe-rust
-mv yuji-probe-rust-0.11.4 /opt/yuji-probe-rust
+install -d -m 700 /root/YJ-install
+cd /root/YJ-install
+curl -fLO --proto '=https' --proto-redir '=https' https://github.com/coexacx/YJmonitor/releases/download/v0.11.5/yuji-probe-rust-0.11.5.zip
+curl -fLO --proto '=https' --proto-redir '=https' https://github.com/coexacx/YJmonitor/releases/download/v0.11.5/yuji-probe-rust-0.11.5.zip.sha256
+sha256sum -c yuji-probe-rust-0.11.5.zip.sha256
+unzip yuji-probe-rust-0.11.5.zip
+test ! -e /opt/YJ
+mv yuji-probe-rust-0.11.5 /opt/YJ
 ```
 
 校验和用于核对下载内容；完整的签名校验由一键安装器和后台升级器执行。手动部署只从本仓库受信任的 Release 获取包和校验文件。
@@ -44,11 +44,11 @@ mv yuji-probe-rust-0.11.4 /opt/yuji-probe-rust
 确认结构：
 
 ```text
-/opt/yuji-probe-rust/
+/opt/YJ/
   bin/probe-linux-amd64
   bin/probe-linux-arm64
   ops/templates/nginx-rust.conf
-  ops/templates/yuji-probe-rust.service
+  ops/templates/YJ.service
   source/                       # 源码，运行无需编译
   docs/
 ```
@@ -58,10 +58,10 @@ mv yuji-probe-rust-0.11.4 /opt/yuji-probe-rust
 以 root 执行源码包内的准备脚本：
 
 ~~~sh
-python3 /opt/yuji-probe-rust/ops/prepare-service.py
+python3 /opt/YJ/ops/prepare-service.py
 ~~~
 
-脚本自动创建独立的服务账户、私有数据目录，并设置二进制执行权限。默认账户为 yuji-probe-rust，数据目录为 /var/lib/yuji-probe-rust/control，无需手动执行 useradd、mkdir 或 chown。重复运行只接受属于该实例且权限正确的目录；遇到符号链接、不匹配的已有账户或目录会停止，不接管其他程序的数据。
+脚本自动创建独立的服务账户、私有数据目录，并设置二进制执行权限。默认账户为 YJ，数据目录为 /var/lib/YJ/control，无需手动执行 useradd、mkdir 或 chown。重复运行只接受属于该实例且权限正确的目录；遇到符号链接、不匹配的已有账户或目录会停止，不接管其他程序的数据。
 
 程序目录须由 root 管理，服务账户只写私有数据目录。使用一键安装时，这一步也会由安装器自动完成。
 
@@ -69,7 +69,7 @@ python3 /opt/yuji-probe-rust/ops/prepare-service.py
 
 查看 `uname -m`：x86_64 使用 amd64；aarch64 使用 arm64。
 
-创建 `/etc/systemd/system/yuji-probe-rust.service`。下面以 amd64 为例，替换域名；ARM 服务器把程序名改为 `probe-linux-arm64`：
+创建 `/etc/systemd/system/YJ.service`。下面以 amd64 为例，替换域名；ARM 服务器把程序名改为 `probe-linux-arm64`：
 
 ```ini
 [Unit]
@@ -79,10 +79,10 @@ Wants=network-online.target
 
 [Service]
 Type=simple
-User=yuji-probe-rust
-Group=yuji-probe-rust
-WorkingDirectory=/opt/yuji-probe-rust
-ExecStart=/opt/yuji-probe-rust/bin/probe-linux-amd64 -state /var/lib/yuji-probe-rust/control -listen 127.0.0.1:19282 -origin https://probe.example.com -web
+User=YJ
+Group=YJ
+WorkingDirectory=/opt/YJ
+ExecStart=/opt/YJ/bin/probe-linux-amd64 -state /var/lib/YJ/control -listen 127.0.0.1:19282 -origin https://probe.example.com -web
 Restart=always
 RestartSec=3
 TimeoutStopSec=10
@@ -91,7 +91,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=true
-ReadWritePaths=/var/lib/yuji-probe-rust
+ReadWritePaths=/var/lib/YJ
 ProtectKernelTunables=true
 ProtectKernelModules=true
 ProtectControlGroups=true
@@ -110,8 +110,8 @@ WantedBy=multi-user.target
 
 ```sh
 systemctl daemon-reload
-systemctl enable --now yuji-probe-rust
-systemctl status yuji-probe-rust --no-pager
+systemctl enable --now YJ
+systemctl status YJ --no-pager
 ```
 
 首次启动会生成私有安装链接；还没有创建任何管理员。程序不会在日志中输出密码或安装密钥。
@@ -169,7 +169,7 @@ include /www/server/panel/vhost/rewrite/probe.example.com.conf;
 在服务器终端运行：
 
 ```sh
-cat /var/lib/yuji-probe-rust/control/setup-link.txt
+cat /var/lib/YJ/control/setup-link.txt
 ```
 
 复制输出的完整 HTTPS 链接到自己的浏览器。该链接含安装所有权凭据，不发给他人。填写站点名称、管理员用户名与密码，提交后跳转登录页面。首次访问普通域名只显示安装尚未完成，不能抢先创建管理员。
@@ -181,7 +181,10 @@ cat /var/lib/yuji-probe-rust/control/setup-link.txt
 以 root 执行：
 
 ```sh
-python3 /opt/yuji-probe-rust/ops/update-panel.py --configure --name rust-main --root /opt/yuji-probe-rust --state /var/lib/yuji-probe-rust/control --service yuji-probe-rust.service --origin https://probe.example.com --listen 127.0.0.1:19282 --distribution rust
+install -d -m 700 /etc/YJ
+python3 /opt/YJ/ops/manage.py configure https://probe.example.com 19282
+python3 /opt/YJ/ops/install-command.py
+sudo YJ
 ```
 
 版本管理只检查本仓库 `v*` 的正式发行版。管理员确认更新后，独立 root 更新服务下载并校验签名，保存上一版与私有状态，更新、重启并做健康检查；失败自动恢复，也可手动回退。不是发现新版后无人值守自动升级。
@@ -193,7 +196,7 @@ python3 /opt/yuji-probe-rust/ops/update-panel.py --configure --name rust-main --
 1. 在后台生成加密备份并下载到站点之外，同时保留旧程序与旧 Nginx 配置。
 2. 暂停管理员操作，结束终端和传输。只停止探针自己的旧主控/专用 PHP 池，保持其他网站服务运行。
 3. 把旧 `storage/control` **完整复制**到新私有状态目录，保留 `app.key`、认证配置、节点配置、加密密钥与 SSH 指纹。不可只复制 nodes.json，也不运行新安装向导覆盖原配置。
-4. 将数据目录所有者改为新的服务用户，目录 700、文件 600。旧副本保留在只有 root 可读的位置。如旧状态中存在手动准备的 `control/releases` 离线 Agent 缓存，先核对 `stable.json` 的已签名版本。本版需要 Agent 0.2.2；旧版缓存应移至站点之外备份，让新主控从新仓库取得匹配的发布文件。此缓存不包含节点认证密钥，勿将整个 control 当作缓存清理。
+4. 将数据目录所有者改为新的服务用户，目录 700、文件 600。旧副本保留在只有 root 可读的位置。如旧状态中存在手动准备的 `control/releases` 离线 Agent 缓存，先核对 `stable.json` 的已签名版本。本版需要 Agent 0.2.3；旧版缓存应移至站点之外备份，让新主控从新仓库取得匹配的发布文件。此缓存不包含节点认证密钥，勿将整个 control 当作缓存清理。
 5. 用新 Rust 服务以相同 `-origin` 启动，修改该域名的 Nginx 代理端口，检查后 reload。
 6. 验证原管理员登录、所有节点上线、SSH/文件操作、通知和备份。主控重启会使旧登录过期，需重新登录。
 7. 重新用 `--distribution rust` 注册这一实例的更新器。停用旧实例更新监听，避免两个更新器同时操作同一状态。

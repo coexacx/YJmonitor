@@ -19,11 +19,11 @@ Nginx + Rust 单二进制服务器探针。页面、网页安装向导、API 与
 ## 一键安装与管理
 
 ~~~sh
-curl -fL --proto '=https' --proto-redir '=https' --tlsv1.2 https://raw.githubusercontent.com/coexacx/YJmonitor/v0.11.4/install.sh -o /root/yuji-install.sh
-bash /root/yuji-install.sh
+curl -fL --proto '=https' --proto-redir '=https' --tlsv1.2 https://raw.githubusercontent.com/coexacx/YJmonitor/v0.11.5/install.sh -o /root/YJ.sh
+bash /root/YJ.sh
 ~~~
 
-安装脚本自动创建服务用户、私有数据目录并设置权限，无需手动准备。只填写站点名称，安装结束显示 **IP:端口** 与随机生成的管理员密码。运行 sudo YJ 进入管理菜单。
+安装脚本自动创建服务用户、私有数据目录并设置权限，无需手动准备。只填写站点名称，安装结束显示 **IP:端口** 与随机生成的管理员密码。运行 sudo YJ 进入管理菜单。服务用户为 YJ，程序 /opt/YJ、数据 /var/lib/YJ、配置 /etc/YJ，开机服务为 YJ.service。
 
 基础安装保持 IP:端口入口。需要域名访问时，在管理菜单选择 **13 配置 Nginx + HTTPS**，填写已解析域名，自动申请证书、设置反向代理与续期。复用现有 Nginx；未安装时安装签名预编译包。Cloudflare 橙云可保持开启，HTTP 验证受阻时支持受限 API Token 的 DNS 验证。[自动 HTTPS 使用说明](docs/自动HTTPS.md)。
 
@@ -37,7 +37,7 @@ bash /root/yuji-install.sh
 
 ## 发行内容
 
-主控 0.11.4，Agent 0.2.3。[本版功能与验收记录](docs/验收-0.11.4.md)。[自动 HTTPS 验收记录](docs/验收-0.11.1.md)。[新版终端工作区](docs/终端工作区-0.11.0.md)。[终端滚动与输出记录说明](docs/终端回滚记录-0.10.2.md)。完整包为 **yuji-probe-rust-0.11.4.zip**，包含 amd64 / arm64 预编译主控与完整源码；Agent 二进制、签名清单及安装脚本在同一 Release。GitHub 自动生成的 Source code 包不含主控二进制。
+主控 0.11.5，Agent 0.2.3。主控每小时检查 GitHub 正式发布与签名 Agent 清单，登录后自动提示新版；同版和更高版本不会重复升级。[本版功能与验收记录](docs/验收-0.11.5.md)。[自动 HTTPS 验收记录](docs/验收-0.11.1.md)。[新版终端工作区](docs/终端工作区-0.11.0.md)。[终端滚动与输出记录说明](docs/终端回滚记录-0.10.2.md)。完整包为 **yuji-probe-rust-0.11.5.zip**，包含 amd64 / arm64 预编译主控与完整源码；Agent 二进制、签名清单及安装脚本在同一 Release。GitHub 自动生成的 Source code 包不含主控二进制。
 
 更新只检查本仓库 v* 正式发行版。下载核对 Ed25519 签名、版本、架构、长度与 SHA-256，失败即停止。普通用户不需要 GitHub Token 或编译环境。
 

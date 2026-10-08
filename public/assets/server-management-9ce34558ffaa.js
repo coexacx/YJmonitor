@@ -1,4 +1,4 @@
-import {createPager} from './pagination.mjs';
+import {createPager} from "/assets/pagination-d84897e63d5d.js";
 const emptyFilters=()=>({status:'all',query:'',group:null,provider:null,expiry:'all'});
 export function matchesServer(record,filters,at=Date.now()){
  const n=record.public,q=filters.query.trim().toLocaleLowerCase();

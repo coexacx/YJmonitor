@@ -17,7 +17,7 @@ def trusted_parents(path, include=True):
 
 def prepare(root,data,user):
     root=clean_path(root);data=clean_path(data)
-    if not re.fullmatch(r"[a-z_][a-z0-9_-]{0,30}",user):raise ValueError("服务用户名无效")
+    if user!="YJ" and not re.fullmatch(r"[a-z_][a-z0-9_-]{0,30}",user):raise ValueError("服务用户名无效")
     if data==root or root in data.parents or data in root.parents:raise ValueError("程序与数据目录必须独立")
     trusted_parents(root);trusted_parents(data,False)
     binaries=[root/"bin"/("probe-linux-"+arch) for arch in ("amd64","arm64")]
@@ -50,10 +50,10 @@ def main():
     os.umask(0o077)
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--root",default=str(pathlib.Path(__file__).resolve().parent.parent))
-    parser.add_argument("--data",default="/var/lib/yuji-probe-rust")
-    parser.add_argument("--user",default="yuji-probe-rust")
+    parser.add_argument("--data",default="/var/lib/YJ")
+    parser.add_argument("--user",default="YJ")
     args=parser.parse_args()
-    fd=os.open("/run/yuji-probe-prepare.lock",os.O_CREAT|os.O_RDWR|os.O_NOFOLLOW,0o600)
+    fd=os.open("/run/YJ-prepare.lock",os.O_CREAT|os.O_RDWR|os.O_NOFOLLOW,0o600)
     with os.fdopen(fd,"w") as lock:
         fcntl.flock(lock,fcntl.LOCK_EX|fcntl.LOCK_NB)
         prepare(args.root,args.data,args.user)

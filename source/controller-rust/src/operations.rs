@@ -100,7 +100,10 @@ pub async fn api(app: App, c: Context, body: Vec<u8>) -> ApiResult<ApiReply> {
             app.guard(&mut i, &c, true, false)?;
             i.request("update-check", 10)?;
         }
-        return crate::backup::check_release(&app).await;
+        crate::updates::refresh(&app, true).await;
+        let mut i = app.lock();
+        app.guard(&mut i, &c, true, false)?;
+        return Ok(ApiReply::ok(i.updates.view()));
     }
     let mut i = app.lock();
     app.guard(&mut i, &c, true, c.method != "GET")?;
@@ -137,10 +140,10 @@ pub async fn api(app: App, c: Context, body: Vec<u8>) -> ApiResult<ApiReply> {
             Ok(ApiReply::ok(json!({"codes":codes})))
         }
         ("status", "GET") => Ok(ApiReply::ok(
-            json!({"version":VERSION,"agentVersion":crate::deploy::AGENT_VERSION,"transfers":i.ops.transfers.iter().map(|(id,t)|json!({"id":id,"state":t.state,"message":t.message,"target":t.target})).collect::<Vec<_>>(),"removals":i.ops.removal_names,"updater":app.0.dir.join("updater-enabled").exists()}),
+            json!({"version":VERSION,"agentVersion":crate::deploy::AGENT_VERSION,"updates":i.updates.view(),"transfers":i.ops.transfers.iter().map(|(id,t)|json!({"id":id,"state":t.state,"message":t.message,"target":t.target})).collect::<Vec<_>>(),"removals":i.ops.removal_names,"updater":app.0.dir.join("updater-enabled").exists()}),
         )),
         ("agent-update", "POST") | ("agent-rollback", "POST") => {
-            auth::require_elevated(&i, &c)?;
+            i.request("agent-version-operation", 30)?;
             crate::migration::start_manage(
                 &app,
                 &mut i,
@@ -154,12 +157,18 @@ pub async fn api(app: App, c: Context, body: Vec<u8>) -> ApiResult<ApiReply> {
             Ok(ApiReply::accepted(json!({"ok":true})))
         }
         ("panel-update", "POST") | ("panel-rollback", "POST") => {
-            auth::require_elevated(&i, &c)?;
+            i.request("panel-version-operation", 10)?;
             if !app.0.dir.join("updater-enabled").exists() {
                 return Err(ApiError::new(409, "请先按部署教程安装专用更新服务"));
             }
             if action == "panel-update" && !crate::backup::valid_version(&v.version) {
                 return Err(ApiError::new(400, "版本号不正确"));
+            }
+            if action == "panel-update" {
+                i.updates.validate_update(&v.version)?;
+            }
+            if app.0.dir.join("update-request.json").exists() {
+                return Err(ApiError::new(409, "已有主控更新任务，请稍后查看结果"));
             }
             atomic_json(&app.0.dir.join("update-request.json"),&json!({"action":if action=="panel-update"{"update"}else{"rollback"},"version":v.version,"at":now()})).map_err(|_|ApiError::internal())?;
             app.record(&mut i, "panel_update_requested", &v.version);
@@ -170,7 +179,15 @@ pub async fn api(app: App, c: Context, body: Vec<u8>) -> ApiResult<ApiReply> {
                 .unwrap_or(json!({"state":"idle"})),
         )),
         ("migration/retry", "POST") => {
-            auth::require_elevated(&i, &c)?;
+            if !i
+                .ops
+                .transfers
+                .get(&v.id)
+                .is_some_and(|t| matches!(t.action.as_str(), "upgrade" | "rollback"))
+            {
+                auth::require_elevated(&i, &c)?;
+            }
+            i.request("version-task-retry", 30)?;
             let t = i
                 .ops
                 .transfers
@@ -187,6 +204,7 @@ pub async fn api(app: App, c: Context, body: Vec<u8>) -> ApiResult<ApiReply> {
     }
 }
 pub fn start(app: &App) {
+    crate::updates::start(app);
     let app = app.clone();
     tokio::spawn(async move {
         let mut timer = tokio::time::interval(Duration::from_secs(5));
